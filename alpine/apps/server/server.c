@@ -137,7 +137,8 @@ int main(int argc, char *argv[])
     }
     else
     {
-      memcpy(path + 21 + i - 4, "/index.html", 12);
+      //memcpy(path + 21 + i - 4, "/index.html", 12);
+      memcpy(path + 21 + i - 4, "/index_trx_duo.html", 20);
     }
   }
 
