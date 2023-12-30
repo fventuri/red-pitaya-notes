@@ -3,8 +3,8 @@ device=$1
 boot_dir=`mktemp -d /tmp/BOOT.XXXXXXXXXX`
 root_dir=`mktemp -d /tmp/ROOT.XXXXXXXXXX`
 
-linux_dir=tmp/linux-6.1
-linux_ver=6.1.55-xilinx
+linux_dir=tmp/linux-6.6
+linux_ver=6.6.7-xilinx
 
 # Choose mirror automatically, depending the geographic and network location
 mirror=http://deb.debian.org/debian
@@ -13,7 +13,7 @@ distro=bookworm
 arch=armhf
 
 passwd=changeme
-timezone=Europe/Brussels
+timezone=America/New_York
 
 # Create partitions
 
