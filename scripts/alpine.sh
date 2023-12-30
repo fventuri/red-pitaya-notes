@@ -1,13 +1,13 @@
-alpine_url=http://dl-cdn.alpinelinux.org/alpine/v3.18
+alpine_url=http://dl-cdn.alpinelinux.org/alpine/v3.19
 
-tools_tar=apk-tools-static-2.14.0-r2.apk
+tools_tar=apk-tools-static-2.14.0-r5.apk
 tools_url=$alpine_url/main/armv7/$tools_tar
 
-firmware_tar=linux-firmware-other-20230515-r6.apk
+firmware_tar=linux-firmware-other-20231111-r1.apk
 firmware_url=$alpine_url/main/armv7/$firmware_tar
 
-linux_dir=tmp/linux-6.1
-linux_ver=6.1.55-xilinx
+linux_dir=tmp/linux-6.6
+linux_ver=6.6.7-xilinx
 
 modules_dir=alpine-modloop/lib/modules/$linux_ver
 
@@ -17,7 +17,7 @@ test -f $tools_tar || curl -L $tools_url -o $tools_tar
 
 test -f $firmware_tar || curl -L $firmware_url -o $firmware_tar
 
-for tar in linux-firmware-ath9k_htc-20230515-r6.apk linux-firmware-brcm-20230515-r6.apk linux-firmware-cypress-20230515-r6.apk linux-firmware-rtlwifi-20230515-r6.apk
+for tar in linux-firmware-ath9k_htc-20231111-r1.apk linux-firmware-brcm-20231111-r1.apk linux-firmware-cypress-20231111-r1.apk linux-firmware-rtlwifi-20231111-r1.apk
 do
   url=$alpine_url/main/armv7/$tar
   test -f $tar || curl -L $url -o $tar
@@ -36,7 +36,7 @@ depmod -a -b alpine-modloop $linux_ver
 
 tar -zxf $firmware_tar --directory=alpine-modloop/lib/modules --warning=no-unknown-keyword --strip-components=1 --wildcards lib/firmware/ar* lib/firmware/rt*
 
-for tar in linux-firmware-ath9k_htc-20230515-r6.apk linux-firmware-brcm-20230515-r6.apk linux-firmware-cypress-20230515-r6.apk linux-firmware-rtlwifi-20230515-r6.apk
+for tar in linux-firmware-ath9k_htc-20231111-r1.apk linux-firmware-brcm-20231111-r1.apk linux-firmware-cypress-20231111-r1.apk linux-firmware-rtlwifi-20231111-r1.apk
 do
   tar -zxf $tar --directory=alpine-modloop/lib/modules --warning=no-unknown-keyword --strip-components=1
 done
@@ -60,11 +60,9 @@ ln -s /media/mmcblk0p1/cache $root_dir/etc/apk/cache
 cp -r alpine/etc $root_dir/
 cp -r alpine/apps $root_dir/media/mmcblk0p1/
 
-projects="common_tools led_blinker mcpha playground pulsed_nmr sdr_receiver sdr_receiver_hpsdr sdr_receiver_wide sdr_transceiver sdr_transceiver_ft8 sdr_transceiver_hpsdr sdr_transceiver_wide sdr_transceiver_wspr vna"
+projects="led_blinker mcpha playground pulsed_nmr sdr_receiver_trx_duo sdr_receiver_hpsdr_trx_duo sdr_receiver_wide_trx_duo sdr_transceiver_trx_duo sdr_transceiver_ft8_trx_duo sdr_transceiver_hpsdr_trx_duo sdr_transceiver_wide_trx_duo sdr_transceiver_wspr_trx_duo vna_trx_duo"
 
-projects_122_88="led_blinker_122_88 pulsed_nmr_122_88 sdr_receiver_122_88 sdr_receiver_hpsdr_122_88 sdr_receiver_wide_122_88 sdr_transceiver_122_88 sdr_transceiver_ft8_122_88 sdr_transceiver_hpsdr_122_88 sdr_transceiver_wspr_122_88 vna_122_88"
-
-for p in $projects $projects_122_88
+for p in $projects
 do
   mkdir -p $root_dir/media/mmcblk0p1/apps/$p
   cp -r projects/$p/server/* $root_dir/media/mmcblk0p1/apps/$p/
@@ -119,9 +117,9 @@ sed -i 's/^SAVE_ON_STOP=.*/SAVE_ON_STOP="no"/;s/^IPFORWARD=.*/IPFORWARD="yes"/' 
 
 sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' etc/ssh/sshd_config
 
-echo root:$passwd | chpasswd
+echo "root:$passwd" | chpasswd
 
-hostname red-pitaya
+hostname trx-duo
 
 sed -i 's/^# LBU_MEDIA=.*/LBU_MEDIA=mmcblk0p1/' etc/lbu/lbu.conf
 
@@ -136,9 +134,7 @@ ln -s /media/mmcblk0p1/wifi root/wifi
 lbu add root
 lbu delete etc/resolv.conf
 lbu delete etc/cron.d/ft8
-lbu delete etc/cron.d/ft8_122_88
 lbu delete etc/cron.d/wspr
-lbu delete etc/cron.d/wspr_122_88
 lbu delete root/.ash_history
 
 lbu commit -d
@@ -165,7 +161,7 @@ tar -zxf \$wsprd_tar --strip-components=1 --directory=\$wsprd_dir
 rm \$wsprd_tar
 make -C \$wsprd_dir
 
-for p in server $projects $projects_122_88
+for p in server $projects
 do
   make -C /media/mmcblk0p1/apps/\$p clean
   make -C /media/mmcblk0p1/apps/\$p
@@ -175,7 +171,7 @@ EOF_CHROOT
 
 cp -r $root_dir/media/mmcblk0p1/apps .
 cp -r $root_dir/media/mmcblk0p1/cache .
-cp $root_dir/media/mmcblk0p1/red-pitaya.apkovl.tar.gz .
+cp $root_dir/media/mmcblk0p1/trx-duo.apkovl.tar.gz .
 
 cp -r alpine/wifi .
 
@@ -183,6 +179,6 @@ hostname -F /etc/hostname
 
 rm -rf $root_dir alpine-apk
 
-zip -r red-pitaya-alpine-3.18-armv7-`date +%Y%m%d`.zip apps boot.bin cache modloop red-pitaya.apkovl.tar.gz wifi
+zip -r red-pitaya-alpine-3.19-armv7-`date +%Y%m%d`.zip apps boot.bin cache modloop trx-duo.apkovl.tar.gz wifi
 
-rm -rf apps cache modloop red-pitaya.apkovl.tar.gz wifi
+rm -rf apps cache modloop trx-duo.apkovl.tar.gz wifi
