@@ -207,7 +207,7 @@ cell pavel-demin:user:port_slicer cfg_slice_0 {
 }
 
 module rx_0 {
-  source projects/sdr_transceiver_hpsdr/rx.tcl
+  source projects/sdr_transceiver_hpsdr_trx_duo/rx.tcl
 } {
   slice_0/din rst_slice_0/dout
   slice_1/din rst_slice_1/dout
@@ -267,7 +267,7 @@ cell pavel-demin:user:port_slicer cfg_slice_1 {
 }
 
 module tx_0 {
-  source projects/sdr_transceiver_hpsdr/tx.tcl
+  source projects/sdr_transceiver_hpsdr_trx_duo/tx.tcl
 } {
   fifo_0/aresetn rst_slice_2/dout
   keyer_0/key_flag key_slice_0/dout
@@ -298,7 +298,7 @@ cell pavel-demin:user:port_slicer cfg_slice_2 {
 }
 
 module codec {
-  source projects/sdr_transceiver_hpsdr/codec.tcl
+  source projects/sdr_transceiver_hpsdr_trx_duo/codec.tcl
 } {
   fifo_0/aresetn rst_slice_3/dout
   keyer_0/key_flag key_slice_1/dout

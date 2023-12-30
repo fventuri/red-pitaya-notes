@@ -51,7 +51,7 @@ cell pavel-demin:user:axis_red_pitaya_adc adc_0 {
 # RX 0
 
 module rx_0 {
-  source projects/sdr_receiver_hpsdr/rx.tcl
+  source projects/sdr_receiver_hpsdr_trx_duo/rx.tcl
 } {
   hub_0/S_AXI ps_0/M_AXI_GP0
 }

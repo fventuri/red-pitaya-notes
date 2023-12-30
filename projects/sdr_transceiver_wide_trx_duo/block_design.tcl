@@ -82,7 +82,7 @@ create_bd_port -dir O -from 7 -to 0 exp_p_tri_io
 # TRX
 
 module trx_0 {
-  source projects/sdr_transceiver_wide/trx.tcl
+  source projects/sdr_transceiver_wide_trx_duo/trx.tcl
 } {
   hub_0/S_AXI ps_0/M_AXI_GP0
   out_slice_0/dout exp_p_tri_io
