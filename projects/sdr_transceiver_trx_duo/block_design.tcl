@@ -117,7 +117,7 @@ cell xilinx.com:ip:xlconcat concat_1 {
 # TRX
 
 module trx_0 {
-  source projects/sdr_transceiver/trx.tcl
+  source projects/sdr_transceiver_trx_duo/trx.tcl
 } {
   hub_0/S_AXI ps_0/M_AXI_GP0
   out_slice_0/dout concat_1/In0
@@ -126,7 +126,7 @@ module trx_0 {
 }
 
 module trx_1 {
-  source projects/sdr_transceiver/trx.tcl
+  source projects/sdr_transceiver_trx_duo/trx.tcl
 } {
   hub_0/S_AXI ps_0/M_AXI_GP1
   out_slice_0/dout concat_1/In1
