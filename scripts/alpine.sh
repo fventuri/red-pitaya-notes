@@ -60,7 +60,7 @@ ln -s /media/mmcblk0p1/cache $root_dir/etc/apk/cache
 cp -r alpine/etc $root_dir/
 cp -r alpine/apps $root_dir/media/mmcblk0p1/
 
-projects="led_blinker mcpha playground pulsed_nmr sdr_receiver_trx_duo sdr_receiver_hpsdr_trx_duo sdr_receiver_wide_trx_duo sdr_transceiver_trx_duo sdr_transceiver_ft8_trx_duo sdr_transceiver_hpsdr_trx_duo sdr_transceiver_wide_trx_duo sdr_transceiver_wspr_trx_duo vna_trx_duo"
+projects="common_tools led_blinker mcpha playground pulsed_nmr sdr_receiver_trx_duo sdr_receiver_hpsdr_trx_duo sdr_receiver_wide_trx_duo sdr_transceiver_trx_duo sdr_transceiver_ft8_trx_duo sdr_transceiver_hpsdr_trx_duo sdr_transceiver_wide_trx_duo sdr_transceiver_wspr_trx_duo vna_trx_duo"
 
 for p in $projects
 do
@@ -179,6 +179,21 @@ hostname -F /etc/hostname
 
 rm -rf $root_dir alpine-apk
 
-zip -r red-pitaya-alpine-3.19-armv7-`date +%Y%m%d`.zip apps boot.bin cache modloop trx-duo.apkovl.tar.gz wifi
+# split in 25MB parts so they can be uploaded to GitHub - fv
+zipprefix=red-pitaya-alpine-3.19-armv7-`date +%Y%m%d`
+rm $zipprefix.z*
+zip -r -s 25m $zipprefix.zip apps boot.bin cache modloop trx-duo.apkovl.tar.gz wifi
+
+# compute and save checksums
+cksums=$zipprefix.cksums
+> $cksums
+echo "MD5 checksums" >> $cksums
+md5sum $zipprefix.z* >> $cksums
+echo >> $cksums
+echo "SHA1 checksums" >> $cksums
+sha1sum $zipprefix.z* >> $cksums
+echo >> $cksums
+echo "SHA256 checksums" >> $cksums
+sha256sum $zipprefix.z* >> $cksums
 
 rm -rf apps cache modloop trx-duo.apkovl.tar.gz wifi

@@ -102,7 +102,7 @@ cell pavel-demin:user:port_slicer cfg_slice_0 {
 }
 
 module rx_0 {
-  source projects/sdr_transceiver_ft8/rx.tcl
+  source projects/sdr_transceiver_ft8_trx_duo/rx.tcl
 } {
   slice_0/din rst_slice_0/dout
   slice_1/din cfg_slice_0/dout
@@ -142,7 +142,7 @@ cell pavel-demin:user:port_slicer cfg_slice_1 {
 }
 
 module tx_0 {
-  source projects/sdr_transceiver_ft8/tx.tcl
+  source projects/sdr_transceiver_ft8_trx_duo/tx.tcl
 } {
   slice_0/din rst_slice_1/dout
   slice_1/din cfg_slice_1/dout
