@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 
 #define DIR "/sys/bus/iio/devices/iio:device0/"
+#define EEPROM "/sys/bus/i2c/devices/0-0050/eeprom"
 
 const char *directory = "/media/mmcblk0p1/apps";
 const char *forbidden = "HTTP/1.0 403 Forbidden\n\n";
@@ -92,13 +93,14 @@ float read_volt(char *name, char *label, size_t label_size)
 int main(int argc, char *argv[])
 {
   FILE *fp;
-  int fd, id, i, j, top;
+  int fd, id, i, j, k, top;
   float temp0, volt;
   struct stat sb;
   size_t size;
   char buffer[256];
   char path[291];
   char label[64];
+  char eeprom[1024];
   char *end;
   long freq;
   volatile int *slcr;
@@ -185,6 +187,40 @@ int main(int argc, char *argv[])
     printf("%s=%.3f\n", label, volt);
     volt = read_volt("in_voltage7_vrefn", label, 64);
     printf("%s=%.3f\n", label, volt);
+    return 0;
+  }
+
+  if(i == 11 && strncmp(buffer + 5, "eeprom", 6) == 0)
+  {
+    if((fd = open(EEPROM, O_RDONLY)) < 0)
+    {
+      fwrite(forbidden, 24, 1, stdout);
+      return 1;
+    }
+    if(lseek(fd, 0x1800, SEEK_SET) < 0)
+    {
+      fwrite(forbidden, 24, 1, stdout);
+      return 1;
+    }
+    if(read(fd, eeprom, 1024) < 0)
+    {
+      fwrite(forbidden, 24, 1, stdout);
+      return 1;
+    }
+    /* replace '\0' with '\n' */
+    for(k = 4; k < 1024; ++k)
+    {
+      if(eeprom[k] == 0)
+      {
+        eeprom[k] = '\n';
+        if(k < 1023 && eeprom[k+1] == 0)
+        {
+          break;
+        }
+      }
+    }
+    fwrite(okheader, 17, 1, stdout);
+    fwrite(eeprom + 4, k + 1 - 4, 1, stdout);
     return 0;
   }
 
