@@ -1,5 +1,8 @@
 alpine_url=http://dl-cdn.alpinelinux.org/alpine/v3.19
 
+uboot_tar=alpine-uboot-3.19.0-armv7.tar.gz
+uboot_url=$alpine_url/releases/armv7/$uboot_tar
+
 tools_tar=apk-tools-static-2.14.0-r5.apk
 tools_url=$alpine_url/main/armv7/$tools_tar
 
@@ -15,6 +18,7 @@ passwd=changeme
 
 project=$1
 
+test -f $uboot_tar || curl -L $uboot_url -o $uboot_tar
 test -f $tools_tar || curl -L $tools_url -o $tools_tar
 
 test -f $firmware_tar || curl -L $firmware_url -o $firmware_tar
@@ -25,8 +29,25 @@ do
   test -f $tar || curl -L $url -o $tar
 done
 
+mkdir alpine-uboot
+tar -zxf $uboot_tar --directory=alpine-uboot
+
 mkdir alpine-apk
 tar -zxf $tools_tar --directory=alpine-apk --warning=no-unknown-keyword
+
+mkdir alpine-initramfs
+cd alpine-initramfs
+
+gzip -dc ../alpine-uboot/boot/initramfs-lts | cpio -id
+rm -rf etc/modprobe.d
+rm -rf lib/firmware
+rm -rf lib/modules
+rm -rf var
+find . | sort | cpio --quiet -o -H newc | gzip -9 > ../initrd.gz
+
+cd ..
+
+mkimage -A arm -T ramdisk -C gzip -d initrd.gz uInitrd
 
 mkdir -p $modules_dir/kernel
 
@@ -45,7 +66,7 @@ done
 
 mksquashfs alpine-modloop/lib modloop -b 1048576 -comp xz -Xdict-size 100%
 
-rm -rf alpine-modloop
+rm -rf alpine-uboot alpine-initramfs initrd.gz alpine-modloop
 
 root_dir=alpine-root
 
@@ -82,6 +103,8 @@ apk add openssh u-boot-tools iw wpa_supplicant dhcpcd dnsmasq hostapd iptables a
 
 rc-update add bootmisc boot
 rc-update add hostname boot
+rc-update add hwdrivers boot
+rc-update add modloop boot
 rc-update add swclock boot
 rc-update add sysctl boot
 rc-update add syslog boot
@@ -94,8 +117,6 @@ rc-update add savecache shutdown
 rc-update add devfs sysinit
 rc-update add dmesg sysinit
 rc-update add mdev sysinit
-rc-update add hwdrivers sysinit
-rc-update add modloop sysinit
 
 rc-update add avahi-daemon default
 rc-update add chronyd default
@@ -117,6 +138,7 @@ sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' etc/ssh/sshd_config
 
 echo root:$passwd | chpasswd
 
+setup-hostname trx-duo
 hostname trx-duo
 
 sed -i 's/^# LBU_MEDIA=.*/LBU_MEDIA=mmcblk0p1/' etc/lbu/lbu.conf
@@ -156,6 +178,6 @@ hostname -F /etc/hostname
 
 rm -rf $root_dir alpine-apk
 
-zip -r red-pitaya-alpine-3.19-armv7-`date +%Y%m%d`-$project.zip apps boot.bin cache modloop trx-duo.apkovl.tar.gz start.sh wifi
+zip -r red-pitaya-alpine-3.19-armv7-`date +%Y%m%d`-$project.zip apps boot.bin cache devicetree.dtb modloop trx-duo.apkovl.tar.gz start.sh uEnv.txt uImage uInitrd wifi
 
-rm -rf apps cache modloop trx-duo.apkovl.tar.gz start.sh wifi
+rm -rf apps cache modloop trx-duo.apkovl.tar.gz start.sh uInitrd wifi

@@ -19,35 +19,40 @@ VIVADO = vivado -nolog -nojournal -mode batch
 XSCT = xsct
 RM = rm -rf
 
-INITRAMFS_TAG = 3.19
+UBOOT_TAG = 2023.10
 LINUX_TAG = 6.6
 DTREE_TAG = xilinx_v2023.2
 
-INITRAMFS_DIR = tmp/initramfs-$(INITRAMFS_TAG)
+UBOOT_DIR = tmp/u-boot-$(UBOOT_TAG)
 LINUX_DIR = tmp/linux-$(LINUX_TAG)
 DTREE_DIR = tmp/device-tree-xlnx-$(DTREE_TAG)
 
+UBOOT_TAR = tmp/u-boot-$(UBOOT_TAG).tar.bz2
 LINUX_TAR = tmp/linux-$(LINUX_TAG).tar.xz
 DTREE_TAR = tmp/device-tree-xlnx-$(DTREE_TAG).tar.gz
 
-INITRAMFS_URL = https://dl-cdn.alpinelinux.org/alpine/v$(INITRAMFS_TAG)/releases/armv7/netboot/initramfs-lts
+UBOOT_URL = https://ftp.denx.de/pub/u-boot/u-boot-$(UBOOT_TAG).tar.bz2
 LINUX_URL = https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$(LINUX_TAG).7.tar.xz
 DTREE_URL = https://github.com/Xilinx/device-tree-xlnx/archive/$(DTREE_TAG).tar.gz
 
-SSBL_URL = https://github.com/pavel-demin/ssbl/releases/latest/download/ssbl.elf
-
-RTL8188_TAR = tmp/rtl8188eu-main.tar.gz
-RTL8188_URL = https://github.com/pavel-demin/rtl8188eu/archive/main.tar.gz
+RTL8188_TAR = tmp/rtl8188eu-v5.2.2.4.tar.gz
+RTL8188_URL = https://github.com/lwfinger/rtl8188eu/archive/v5.2.2.4.tar.gz
+###RTL8188_TAR = tmp/rtl8188eu-main.tar.gz
+###RTL8188_URL = https://github.com/pavel-demin/rtl8188eu/archive/main.tar.gz
 
 .PRECIOUS: tmp/cores/% tmp/%.xpr tmp/%.xsa tmp/%.bit tmp/%.fsbl/executable.elf tmp/%.tree/system-top.dts
 
-all: tmp/$(NAME).bit boot.bin boot-rootfs.bin
+all: tmp/$(NAME).bit boot.bin uImage devicetree.dtb
 
 cores: $(addprefix tmp/, $(CORES))
 
 xpr: tmp/$(NAME).xpr
 
 bit: tmp/$(NAME).bit
+
+$(UBOOT_TAR):
+	mkdir -p $(@D)
+	curl -L $(UBOOT_URL) -o $@
 
 $(LINUX_TAR):
 	mkdir -p $(@D)
@@ -61,11 +66,13 @@ $(RTL8188_TAR):
 	mkdir -p $(@D)
 	curl -L $(RTL8188_URL) -o $@
 
-$(INITRAMFS_DIR):
+$(UBOOT_DIR): $(UBOOT_TAR)
 	mkdir -p $@
-	curl -L $(INITRAMFS_URL) | gunzip | cpio -id --directory=$@
-	patch -d $@ -p 0 < patches/initramfs.patch
-	rm -rf $@/etc/modprobe.d $@/lib/firmware $@/lib/modules $@/var
+	tar -jxf $< --strip-components=1 --directory=$@
+	patch -d tmp -p 0 < patches/u-boot-$(UBOOT_TAG).patch
+	cp patches/zynq_red_pitaya_defconfig $@/configs
+	cp patches/zynq-red-pitaya.dts $@/arch/arm/dts
+	cp patches/red-pitaya.h $@/include/configs
 
 $(LINUX_DIR): $(LINUX_TAR) $(RTL8188_TAR)
 	mkdir -p $@
@@ -73,6 +80,7 @@ $(LINUX_DIR): $(LINUX_TAR) $(RTL8188_TAR)
 	mkdir -p $@/drivers/net/wireless/realtek/rtl8188eu
 	tar -zxf $(RTL8188_TAR) --strip-components=1 --directory=$@/drivers/net/wireless/realtek/rtl8188eu
 	patch -d tmp -p 0 < patches/linux-$(LINUX_TAG).patch
+	cp patches/zynq_ocm.c $@/arch/arm/mach-zynq
 	cp patches/cma.c $@/drivers/char
 	cp patches/xilinx_devcfg.c $@/drivers/char
 	cp patches/xilinx_zynq_defconfig $@/arch/arm/configs
@@ -81,34 +89,27 @@ $(DTREE_DIR): $(DTREE_TAR)
 	mkdir -p $@
 	tar -zxf $< --strip-components=1 --directory=$@
 
-tmp/ssbl.elf:
-	mkdir -p $(@D)
-	curl -L $(SSBL_URL) -o $@
-
-zImage.bin: $(LINUX_DIR)
+uImage: $(LINUX_DIR)
 	make -C $< mrproper
 	make -C $< ARCH=arm -j $(shell nproc 2> /dev/null || echo 1) \
-	  CROSS_COMPILE=arm-linux-gnueabihf- LOADADDR=0x8000 \
-	  xilinx_zynq_defconfig zImage modules
-	cp $</arch/arm/boot/zImage $@
+	  CROSS_COMPILE=arm-linux-gnueabihf- UIMAGE_LOADADDR=0x8000 \
+	  xilinx_zynq_defconfig uImage modules
+	cp $</arch/arm/boot/uImage $@
 
-initrd.bin: $(INITRAMFS_DIR)
-	cd $< && find . | sort | cpio -o -H newc | gzip -9 -n > ../../$@
-	truncate -s 4M $@
+$(UBOOT_DIR)/u-boot.bin: $(UBOOT_DIR)
+	mkdir -p $(@D)
+	make -C $< mrproper
+	make -C $< ARCH=arm zynq_red_pitaya_defconfig
+	make -C $< ARCH=arm -j $(shell nproc 2> /dev/null || echo 1) \
+	  CROSS_COMPILE=arm-linux-gnueabihf- all
 
-boot.bin: tmp/$(NAME).fsbl/executable.elf tmp/ssbl.elf initrd.dtb zImage.bin initrd.bin
-	echo "img:{[bootloader] tmp/$(NAME).fsbl/executable.elf tmp/ssbl.elf [load=0x2000000] initrd.dtb [load=0x2008000] zImage.bin [load=0x3000000] initrd.bin}" > tmp/boot.bif
+boot.bin: tmp/$(NAME).fsbl/executable.elf $(UBOOT_DIR)/u-boot.bin
+	echo "img:{[bootloader] tmp/$(NAME).fsbl/executable.elf [load=0x4000000,startup=0x4000000] $(UBOOT_DIR)/u-boot.bin}" > tmp/boot.bif
 	bootgen -image tmp/boot.bif -w -o $@
 
-boot-rootfs.bin: tmp/$(NAME).fsbl/executable.elf tmp/ssbl.elf rootfs.dtb zImage.bin
-	echo "img:{[bootloader] tmp/$(NAME).fsbl/executable.elf tmp/ssbl.elf [load=0x2000000] rootfs.dtb [load=0x2008000] zImage.bin}" > tmp/boot-rootfs.bif
-	bootgen -image tmp/boot-rootfs.bif -w -o $@
-
-initrd.dtb: tmp/$(NAME).tree/system-top.dts
-	dtc -I dts -O dtb -o $@ -i tmp/$(NAME).tree -i dts dts/initrd.dts
-
-rootfs.dtb: tmp/$(NAME).tree/system-top.dts
-	dtc -I dts -O dtb -o $@ -i tmp/$(NAME).tree -i dts dts/rootfs.dts
+devicetree.dtb: uImage tmp/$(NAME).tree/system-top.dts
+	$(LINUX_DIR)/scripts/dtc/dtc -I dts -O dtb -o devicetree.dtb \
+	  -i tmp/$(NAME).tree tmp/$(NAME).tree/system-top.dts
 
 tmp/cores/%: cores/%.v
 	mkdir -p $(@D)
@@ -137,9 +138,10 @@ tmp/%.tree/system-top.dts: tmp/%.xsa $(DTREE_DIR)
 	mkdir -p $(@D)
 	$(XSCT) scripts/devicetree.tcl $* $(PROC) $(DTREE_DIR)
 	sed -i 's|#include|/include/|' $@
+	patch -d $(@D) < patches/devicetree.patch
 
 clean:
-	$(RM) zImage.bin initrd.bin boot.bin boot-rootfs.bin initrd.dtb rootfs.dtb tmp
+	$(RM) uImage.bin boot.bin devicetree.dtb tmp
 	$(RM) .Xil usage_statistics_webtalk.html usage_statistics_webtalk.xml
 	$(RM) vivado*.jou vivado*.log
 	$(RM) webtalk*.jou webtalk*.log
