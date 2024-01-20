@@ -14,6 +14,10 @@
 		ethernet0 = &gem0;
 		serial0 = &uart0;
 		mmc0 = &sdhci0;
+		i2c0 = &i2c0;
+		//spi0 = &qspi;
+		nvmem0 = &eeprom;
+		//rtc0 = &rtc;
 	};
 
 	memory@0 {
@@ -22,13 +26,13 @@
 	};
 
 	chosen {
-		bootargs = "";
+		bootargs = "earlycon";
 		stdout-path = "serial0:115200n8";
 	};
 
 	usb_phy0: phy0 {
-		#phy-cells = <0>;
 		compatible = "usb-nop-xceiv";
+		#phy-cells = <0>;
 	};
 };
 
@@ -41,8 +45,8 @@
 	phy-mode = "rgmii-id";
 	phy-handle = <&ethernet_phy>;
 
-	ethernet_phy: ethernet-phy@1 {
-		reg = <1>;
+	ethernet_phy: ethernet-phy@0 {
+		reg = <0>;
 		device_type = "ethernet-phy";
 	};
 };
@@ -50,19 +54,19 @@
 &i2c0 {
 	status = "okay";
 	clock-frequency = <400000>;
-	eeprom@50 {
+	eeprom: eeprom@50 {
 		compatible = "24c64";
 		reg = <0x50>;
 	};
 };
 
 &sdhci0 {
-	u-boot,dm-pre-reloc;
+	bootph-all;
 	status = "okay";
 };
 
 &uart0 {
-	u-boot,dm-pre-reloc;
+	bootph-all;
 	status = "okay";
 };
 
@@ -71,3 +75,15 @@
 	dr_mode = "host";
 	usb-phy = <&usb_phy0>;
 };
+
+//&qspi {
+//	status = "okay";
+//	num-cs = <1>;
+//	flash@0 {
+//		compatible = "micron,m25p128";
+//		reg = <0x0>;
+//		spi-tx-bus-width = <4>;
+//		spi-rx-bus-width = <4>;
+//		spi-max-frequency = <50000000>;
+//	};
+//};

@@ -1,0 +1,78 @@
+diff -rupN old/u-boot-2024.01/arch/arm/dts/Makefile u-boot-2024.01/arch/arm/dts/Makefile
+--- old/u-boot-2024.01/arch/arm/dts/Makefile
++++ u-boot-2024.01/arch/arm/dts/Makefile
+@@ -402,7 +402,8 @@ dtb-$(CONFIG_ARCH_ZYNQ) += \
+ 	zynq-zturn.dtb \
+ 	zynq-zturn-v5.dtb \
+ 	zynq-zybo.dtb \
+-	zynq-zybo-z7.dtb
++	zynq-zybo-z7.dtb \
++	zynq-red-pitaya.dtb
+ dtb-$(CONFIG_ARCH_ZYNQMP) += \
+ 	avnet-ultra96-rev1.dtb			\
+ 	zynqmp-a2197-revA.dtb			\
+diff -rupN old/u-boot-2024.01/board/xilinx/zynq/board.c u-boot-2024.01/board/xilinx/zynq/board.c
+--- old/u-boot-2024.01/board/xilinx/zynq/board.c
++++ u-boot-2024.01/board/xilinx/zynq/board.c
+@@ -134,37 +134,6 @@ int dram_init(void)
+ }
+ #endif
+ 
+-enum env_location env_get_location(enum env_operation op, int prio)
+-{
+-	u32 bootmode = zynq_slcr_get_boot_mode() & ZYNQ_BM_MASK;
+-
+-	if (prio)
+-		return ENVL_UNKNOWN;
+-
+-	switch (bootmode) {
+-	case ZYNQ_BM_SD:
+-		if (IS_ENABLED(CONFIG_ENV_IS_IN_FAT))
+-			return ENVL_FAT;
+-		if (IS_ENABLED(CONFIG_ENV_IS_IN_EXT4))
+-			return ENVL_EXT4;
+-		return ENVL_NOWHERE;
+-	case ZYNQ_BM_NAND:
+-		if (IS_ENABLED(CONFIG_ENV_IS_IN_NAND))
+-			return ENVL_NAND;
+-		if (IS_ENABLED(CONFIG_ENV_IS_IN_UBI))
+-			return ENVL_UBI;
+-		return ENVL_NOWHERE;
+-	case ZYNQ_BM_NOR:
+-	case ZYNQ_BM_QSPI:
+-		if (IS_ENABLED(CONFIG_ENV_IS_IN_SPI_FLASH))
+-			return ENVL_SPI_FLASH;
+-		return ENVL_NOWHERE;
+-	case ZYNQ_BM_JTAG:
+-	default:
+-		return ENVL_NOWHERE;
+-	}
+-}
+-
+ #if defined(CONFIG_SET_DFU_ALT_INFO)
+ 
+ #define DFU_ALT_BUF_LEN                SZ_1K
+diff -rupN old/u-boot-2024.01/cmd/eeprom.c u-boot-2024.01/cmd/eeprom.c
+--- old/u-boot-2024.01/cmd/eeprom.c
++++ u-boot-2024.01/cmd/eeprom.c
+@@ -149,7 +149,7 @@ static int eeprom_rw(unsigned dev_addr,
+ 	int rcode = 0;
+ 	uchar addr[3];
+ 
+-#if !CONFIG_IS_ENABLED(DM_I2C) && defined(CONFIG_SYS_I2C_EEPROM_BUS)
++#if defined(CONFIG_SYS_I2C_EEPROM_BUS)
+ 	eeprom_init(CONFIG_SYS_I2C_EEPROM_BUS);
+ #endif
+ 
+diff -rupN old/u-boot-2024.01/common/main.c u-boot-2024.01/common/main.c
+--- old/u-boot-2024.01/common/main.c
++++ u-boot-2024.01/common/main.c
+@@ -65,6 +65,8 @@ void main_loop(void)
+ 	if (cli_process_fdt(&s))
+ 		cli_secure_boot_cmd(s);
+ 
++	env_set("sdboot", "echo Importing environment from SD... && mmcinfo && load mmc 0 0x2000000 uEnv.txt && env import -t 0x2000000 ${filesize} && boot");
++
+ 	autoboot_command(s);
+ 
+ 	cli_loop();
