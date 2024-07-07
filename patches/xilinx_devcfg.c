@@ -119,7 +119,7 @@ static const char * const fclk_name[] = {
  * @irq: Interrupt number
  * @clk: Peripheral clock for devcfg
  * @fclk: Array holding references to the FPGA clocks
- * @fclk_exported: Flag inidcating whether an FPGA clock is exported
+ * @fclk_exported: Flag indicating whether an FPGA clock is exported
  * @is_open: The status bit to indicate whether the device is opened
  * @sem: Instance for the mutex
  * @lock: Instance of spinlock

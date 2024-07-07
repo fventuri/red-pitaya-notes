@@ -4,6 +4,8 @@
 *.img
 *.tar.gz
 *.zip
+*.z0*
+*.cksums
 vivado*
 webtalk*
 tmp

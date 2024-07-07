@@ -6,8 +6,8 @@ tools_url=$alpine_url/main/armv7/$tools_tar
 firmware_tar=linux-firmware-other-20240513-r0.apk
 firmware_url=$alpine_url/main/armv7/$firmware_tar
 
-linux_dir=tmp/linux-6.6
-linux_ver=6.6.32-xilinx
+linux_dir=tmp/linux-6.9
+linux_ver=6.9.8-xilinx
 
 modules_dir=alpine-modloop/lib/modules/$linux_ver
 
@@ -64,7 +64,10 @@ projects="common_tools led_blinker mcpha playground pulsed_nmr sdr_receiver sdr_
 
 projects_122_88="led_blinker_122_88 pulsed_nmr_122_88 sdr_receiver_122_88 sdr_receiver_hpsdr_122_88 sdr_receiver_wide_122_88 sdr_transceiver_122_88 sdr_transceiver_ft8_122_88 sdr_transceiver_hpsdr_122_88 sdr_transceiver_wspr_122_88 vna_122_88"
 
-for p in $projects $projects_122_88
+projects_trx_duo="led_blinker pulsed_nmr sdr_receiver_trx_duo sdr_receiver_hpsdr_trx_duo sdr_receiver_wide_trx_duo sdr_transceiver_trx_duo sdr_transceiver_ft8_trx_duo sdr_transceiver_hpsdr_trx_duo sdr_transceiver_wide_trx_duo sdr_transceiver_wspr_trx_duo vna_trx_duo"
+
+#for p in $projects $projects_122_88
+for p in $projects_trx_duo
 do
   mkdir -p $root_dir/media/mmcblk0p1/apps/$p
   cp -r projects/$p/server/* $root_dir/media/mmcblk0p1/apps/$p/
@@ -121,7 +124,7 @@ sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' etc/ssh/sshd_config
 
 echo root:$passwd | chpasswd
 
-hostname red-pitaya
+hostname trx-duo
 
 sed -i 's/^# LBU_MEDIA=.*/LBU_MEDIA=mmcblk0p1/' etc/lbu/lbu.conf
 
@@ -165,7 +168,8 @@ tar -zxf \$wsprd_tar --strip-components=1 --directory=\$wsprd_dir
 rm \$wsprd_tar
 make -C \$wsprd_dir
 
-for p in server $projects $projects_122_88
+#for p in server $projects $projects_122_88
+for p in server $projects_trx_duo
 do
   make -C /media/mmcblk0p1/apps/\$p clean
   make -C /media/mmcblk0p1/apps/\$p
@@ -175,7 +179,7 @@ EOF_CHROOT
 
 cp -r $root_dir/media/mmcblk0p1/apps .
 cp -r $root_dir/media/mmcblk0p1/cache .
-cp $root_dir/media/mmcblk0p1/red-pitaya.apkovl.tar.gz .
+cp $root_dir/media/mmcblk0p1/trx-duo.apkovl.tar.gz .
 
 cp -r alpine/wifi .
 
@@ -183,6 +187,21 @@ hostname -F /etc/hostname
 
 rm -rf $root_dir alpine-apk
 
-zip -r red-pitaya-alpine-3.20-armv7-`date +%Y%m%d`.zip apps boot.bin cache modloop red-pitaya.apkovl.tar.gz wifi
+# split in 25MB parts so they can be uploaded to GitHub - fv
+zipprefix=red-pitaya-alpine-3.20-armv7-`date +%Y%m%d`
+rm $zipprefix.z*
+zip -r -s 25m $zipprefix.zip apps boot.bin cache modloop trx-duo.apkovl.tar.gz wifi
 
-rm -rf apps cache modloop red-pitaya.apkovl.tar.gz wifi
+# compute and save checksums
+cksums=$zipprefix.cksums
+> $cksums
+echo "MD5 checksums" >> $cksums
+md5sum $zipprefix.z* >> $cksums
+echo >> $cksums
+echo "SHA1 checksums" >> $cksums
+sha1sum $zipprefix.z* >> $cksums
+echo >> $cksums
+echo "SHA256 checksums" >> $cksums
+sha256sum $zipprefix.z* >> $cksums
+
+rm -rf apps cache modloop trx-duo.apkovl.tar.gz wifi

@@ -6,8 +6,8 @@ tools_url=$alpine_url/main/armv7/$tools_tar
 firmware_tar=linux-firmware-other-20240513-r0.apk
 firmware_url=$alpine_url/main/armv7/$firmware_tar
 
-linux_dir=tmp/linux-6.6
-linux_ver=6.6.32-xilinx
+linux_dir=tmp/linux-6.9
+linux_ver=6.9.8-xilinx
 
 modules_dir=alpine-modloop/lib/modules/$linux_ver
 
@@ -78,7 +78,7 @@ echo $alpine_url/community >> $root_dir/etc/apk/repositories
 chroot $root_dir /bin/sh <<- EOF_CHROOT
 
 apk update
-apk add openssh u-boot-tools iw wpa_supplicant dhcpcd dnsmasq hostapd iptables avahi dbus dcron chrony musl-dev curl wget less nano bc
+apk add openssh u-boot-tools iw wpa_supplicant dhcpcd dnsmasq hostapd iptables avahi dbus dcron chrony musl-dev curl wget less nano bc dmesg
 
 rc-update add bootmisc boot
 rc-update add hostname boot
@@ -117,7 +117,7 @@ sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' etc/ssh/sshd_config
 
 echo root:$passwd | chpasswd
 
-hostname red-pitaya
+hostname trx-duo
 
 sed -i 's/^# LBU_MEDIA=.*/LBU_MEDIA=mmcblk0p1/' etc/lbu/lbu.conf
 
@@ -144,7 +144,7 @@ EOF_CHROOT
 
 cp -r $root_dir/media/mmcblk0p1/apps .
 cp -r $root_dir/media/mmcblk0p1/cache .
-cp $root_dir/media/mmcblk0p1/red-pitaya.apkovl.tar.gz .
+cp $root_dir/media/mmcblk0p1/trx-duo.apkovl.tar.gz .
 
 sed -i '5,6d' apps/$project/start.sh
 rm -f apps/$project/index.html
@@ -156,6 +156,6 @@ hostname -F /etc/hostname
 
 rm -rf $root_dir alpine-apk
 
-zip -r red-pitaya-alpine-3.20-armv7-`date +%Y%m%d`-$project.zip apps boot.bin cache modloop red-pitaya.apkovl.tar.gz start.sh wifi
+zip -r red-pitaya-alpine-3.20-armv7-`date +%Y%m%d`-$project.zip apps boot.bin cache modloop trx-duo.apkovl.tar.gz start.sh wifi
 
-rm -rf apps cache modloop red-pitaya.apkovl.tar.gz start.sh wifi
+rm -rf apps cache modloop trx-duo.apkovl.tar.gz start.sh wifi
