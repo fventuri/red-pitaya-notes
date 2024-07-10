@@ -21,7 +21,7 @@ RM = rm -rf
 
 INITRAMFS_TAG = 3.20
 LINUX_TAG = 6.9
-DTREE_TAG = xilinx_v2024.1
+DTREE_TAG = 2024.1
 
 INITRAMFS_DIR = tmp/initramfs-$(INITRAMFS_TAG)
 LINUX_DIR = tmp/linux-$(LINUX_TAG)
@@ -32,7 +32,7 @@ DTREE_TAR = tmp/device-tree-xlnx-$(DTREE_TAG).tar.gz
 
 INITRAMFS_URL = https://dl-cdn.alpinelinux.org/alpine/v$(INITRAMFS_TAG)/releases/armv7/netboot/initramfs-lts
 LINUX_URL = https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$(LINUX_TAG).8.tar.xz
-DTREE_URL = https://github.com/Xilinx/device-tree-xlnx/archive/$(DTREE_TAG).tar.gz
+DTREE_URL = https://github.com/Xilinx/device-tree-xlnx/archive/xilinx_v$(DTREE_TAG).tar.gz
 
 SSBL_URL = https://github.com/pavel-demin/ssbl/releases/latest/download/ssbl.elf
 
@@ -136,7 +136,7 @@ tmp/%.fsbl/executable.elf: tmp/%.xsa
 
 tmp/%.tree/system-top.dts: tmp/%.xsa $(DTREE_DIR)
 	mkdir -p $(@D)
-	$(XSCT) scripts/devicetree.tcl $* $(PROC) $(DTREE_DIR)
+	$(XSCT) scripts/devicetree.tcl $* $(PROC) $(DTREE_DIR) $(DTREE_TAG)
 	sed -i 's|#include|/include/|' $@
 
 clean:

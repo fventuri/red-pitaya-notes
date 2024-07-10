@@ -5,6 +5,8 @@ set proc_name [lindex $argv 1]
 
 set repo_path [lindex $argv 2]
 
+set kernel_version [lindex $argv 3]
+
 set boot_args {console=ttyPS0,115200 earlyprintk}
 
 set hard_path tmp/$project_name.hard
@@ -18,7 +20,7 @@ hsi set_repo_path $repo_path
 hsi open_hw_design $hard_path/$project_name.xsa
 hsi create_sw_design -proc $proc_name -os device_tree devicetree
 
-hsi set_property CONFIG.kernel_version {2023.1} [hsi get_os]
+hsi set_property CONFIG.kernel_version $kernel_version [hsi get_os]
 hsi set_property CONFIG.bootargs $boot_args [hsi get_os]
 
 hsi generate_target -dir $tree_path
