@@ -14,9 +14,12 @@
 };
 
 &gem0 {
-  phy-handle = <&ethernet_phy>;
-  ethernet_phy: ethernet-phy@0 {
+  // some TRX-duo's use phy_addr=0 and others phy_addr=1
+  ethernet_phy0: ethernet-phy@0 {
     reg = <0>;
+  };
+  ethernet_phy1: ethernet-phy@1 {
+    reg = <1>;
   };
 };
 

@@ -6,6 +6,11 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <net/if.h>
+#include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <linux/ethtool.h>
+#include <linux/sockios.h>
 
 #define DIR "/sys/bus/iio/devices/iio:device0/"
 #define EEPROM "/sys/bus/i2c/devices/0-0050/eeprom"
@@ -230,6 +235,37 @@ int main(int argc, char *argv[])
     fwrite(okheader, 17, 1, stdout);
     printf("id=%d\n", id);
     printf("freq=%ld\n", freq);
+    int fd = socket(AF_INET, SOCK_DGRAM, 0);
+    if(fd > 0)
+    {
+      struct ifreq ifr;
+      memset(&ifr, 0, sizeof(ifr));
+      strcpy(ifr.ifr_name, "eth0");
+
+      char buffer[sizeof(struct ethtool_link_settings) + sizeof(__u32) * 3 * 128];
+      struct ethtool_link_settings* link_usettings = (struct ethtool_link_settings*)buffer;
+      memset(buffer, 0, sizeof(buffer));
+      link_usettings->cmd = ETHTOOL_GLINKSETTINGS;
+      ifr.ifr_data = (char *)link_usettings;
+
+      if(ioctl(fd, SIOCETHTOOL, &ifr) != -1)
+      {
+        if(link_usettings->link_mode_masks_nwords < 0)
+        {
+          link_usettings->cmd = ETHTOOL_GLINKSETTINGS;
+          link_usettings->link_mode_masks_nwords = -link_usettings->link_mode_masks_nwords;
+
+          if(ioctl(fd, SIOCETHTOOL, &ifr) != -1)
+          {
+            printf("ethernet.speed=%d\n", link_usettings->speed);
+            printf("ethernet.duplex=%d\n", link_usettings->duplex);
+            printf("ethernet.autoneg=%d\n", link_usettings->autoneg);
+            printf("ethernet.port=%d\n", link_usettings->port);
+            printf("ethernet.phy_address=%d\n", link_usettings->phy_address);
+          }
+        }
+      }
+    }
     return 0;
   }
 

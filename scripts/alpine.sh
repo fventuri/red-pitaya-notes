@@ -7,7 +7,7 @@ firmware_tar=linux-firmware-other-20240513-r0.apk
 firmware_url=$alpine_url/main/armv7/$firmware_tar
 
 linux_dir=tmp/linux-6.9
-linux_ver=6.9.8-xilinx
+linux_ver=6.9.9-xilinx
 
 modules_dir=alpine-modloop/lib/modules/$linux_ver
 
@@ -80,7 +80,7 @@ echo $alpine_url/community >> $root_dir/etc/apk/repositories
 chroot $root_dir /bin/sh <<- EOF_CHROOT
 
 apk update
-apk add openssh u-boot-tools ucspi-tcp6 iw wpa_supplicant dhcpcd dnsmasq hostapd iptables avahi dbus dcron chrony gpsd libgfortran musl-dev libconfig-dev alsa-lib-dev alsa-utils curl wget less nano bc dos2unix
+apk add openssh u-boot-tools ucspi-tcp6 iw wpa_supplicant dhcpcd dnsmasq hostapd iptables avahi dbus dcron chrony gpsd libgfortran musl-dev libconfig-dev alsa-lib-dev alsa-utils curl wget less nano bc dos2unix ethtool
 
 rc-update add bootmisc boot
 rc-update add hostname boot
@@ -139,7 +139,7 @@ lbu delete root/.ash_history
 
 lbu commit -d
 
-apk add make gcc gfortran
+apk add make gcc gfortran linux-headers
 
 ft8d_dir=/media/mmcblk0p1/apps/ft8d
 ft8d_tar=/media/mmcblk0p1/apps/ft8d.tar.gz
