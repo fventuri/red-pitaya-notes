@@ -1,0 +1,1685 @@
+diff -rupN old/linux-6.14/drivers/char/Kconfig linux-6.14/drivers/char/Kconfig
+--- old/linux-6.14/drivers/char/Kconfig	2025-03-24 10:02:41.000000000 -0400
++++ linux-6.14/drivers/char/Kconfig	2025-03-29 07:43:35.025322000 -0400
+@@ -423,4 +423,12 @@ config ADI
+ 	  and SSM (Silicon Secured Memory).  Intended consumers of this
+ 	  driver include crash and makedumpfile.
+ 
++config DEVCMA
++	bool "/dev/cma virtual device support"
++	default y
++
++config XILINX_DEVCFG
++	tristate "Xilinx Device Configuration"
++	depends on ARCH_ZYNQ
++
+ endmenu
+diff -rupN old/linux-6.14/drivers/char/Kconfig.orig linux-6.14/drivers/char/Kconfig.orig
+--- old/linux-6.14/drivers/char/Kconfig.orig	1969-12-31 19:00:00.000000000 -0500
++++ linux-6.14/drivers/char/Kconfig.orig	2025-03-24 10:02:41.000000000 -0400
+@@ -0,0 +1,426 @@
++# SPDX-License-Identifier: GPL-2.0
++#
++# Character device configuration
++#
++
++menu "Character devices"
++
++source "drivers/tty/Kconfig"
++
++config TTY_PRINTK
++	tristate "TTY driver to output user messages via printk"
++	depends on EXPERT && TTY
++	default n
++	help
++	  If you say Y here, the support for writing user messages (i.e.
++	  console messages) via printk is available.
++
++	  The feature is useful to inline user messages with kernel
++	  messages.
++	  In order to use this feature, you should output user messages
++	  to /dev/ttyprintk or redirect console to this TTY, or boot
++	  the kernel with console=ttyprintk.
++
++	  If unsure, say N.
++
++config TTY_PRINTK_LEVEL
++	depends on TTY_PRINTK
++	int "ttyprintk log level (1-7)"
++	range 1 7
++	default "6"
++	help
++	  Printk log level to use for ttyprintk messages.
++
++config PRINTER
++	tristate "Parallel printer support"
++	depends on PARPORT
++	depends on HAS_IOPORT || PARPORT_NOT_PC
++	help
++	  If you intend to attach a printer to the parallel port of your Linux
++	  box (as opposed to using a serial printer; if the connector at the
++	  printer has 9 or 25 holes ["female"], then it's serial), say Y.
++	  Also read the Printing-HOWTO, available from
++	  <https://www.tldp.org/docs.html#howto>.
++
++	  It is possible to share one parallel port among several devices
++	  (e.g. printer and ZIP drive) and it is safe to compile the
++	  corresponding drivers into the kernel.
++
++	  To compile this driver as a module, choose M here and read
++	  <file:Documentation/admin-guide/parport.rst>.  The module will be called lp.
++
++	  If you have several parallel ports, you can specify which ports to
++	  use with the "lp" kernel command line option.  (Try "man bootparam"
++	  or see the documentation of your boot loader (lilo or loadlin) about
++	  how to pass options to the kernel at boot time.)  The syntax of the
++	  "lp" command line option can be found in <file:drivers/char/lp.c>.
++
++	  If you have more than 8 printers, you need to increase the LP_NO
++	  macro in lp.c and the PARPORT_MAX macro in parport.h.
++
++config LP_CONSOLE
++	bool "Support for console on line printer"
++	depends on PRINTER
++	help
++	  If you want kernel messages to be printed out as they occur, you
++	  can have a console on the printer. This option adds support for
++	  doing that; to actually get it to happen you need to pass the
++	  option "console=lp0" to the kernel at boot time.
++
++	  If the printer is out of paper (or off, or unplugged, or too
++	  busy..) the kernel will stall until the printer is ready again.
++	  By defining CONSOLE_LP_STRICT to 0 (at your own risk) you
++	  can make the kernel continue when this happens,
++	  but it'll lose the kernel messages.
++
++	  If unsure, say N.
++
++config PPDEV
++	tristate "Support for user-space parallel port device drivers"
++	depends on PARPORT
++	help
++	  Saying Y to this adds support for /dev/parport device nodes.  This
++	  is needed for programs that want portable access to the parallel
++	  port, for instance deviceid (which displays Plug-and-Play device
++	  IDs).
++
++	  This is the parallel port equivalent of SCSI generic support (sg).
++	  It is safe to say N to this -- it is not needed for normal printing
++	  or parallel port CD-ROM/disk support.
++
++	  To compile this driver as a module, choose M here: the
++	  module will be called ppdev.
++
++	  If unsure, say N.
++
++config VIRTIO_CONSOLE
++	tristate "Virtio console"
++	depends on TTY
++	select HVC_DRIVER
++	select VIRTIO
++	help
++	  Virtio console for use with hypervisors.
++
++	  Also serves as a general-purpose serial device for data
++	  transfer between the guest and host.  Character devices at
++	  /dev/vportNpn will be created when corresponding ports are
++	  found, where N is the device number and n is the port number
++	  within that device.  If specified by the host, a sysfs
++	  attribute called 'name' will be populated with a name for
++	  the port which can be used by udev scripts to create a
++	  symlink to the device.
++
++config IBM_BSR
++	tristate "IBM POWER Barrier Synchronization Register support"
++	depends on PPC_PSERIES
++	help
++	  This devices exposes a hardware mechanism for fast synchronization
++	  of threads across a large system which avoids bouncing a cacheline
++	  between several cores on a system
++
++config POWERNV_OP_PANEL
++	tristate "IBM POWERNV Operator Panel Display support"
++	depends on PPC_POWERNV
++	default m
++	help
++	  If you say Y here, a special character device node, /dev/op_panel,
++	  will be created which exposes the operator panel display on IBM
++	  Power Systems machines with FSPs.
++
++	  If you don't require access to the operator panel display from user
++	  space, say N.
++
++	  If unsure, say M here to build it as a module called powernv-op-panel.
++
++source "drivers/char/ipmi/Kconfig"
++
++config DS1620
++	tristate "NetWinder thermometer support"
++	depends on ARCH_NETWINDER
++	help
++	  Say Y here to include support for the thermal management hardware
++	  found in the NetWinder. This driver allows the user to control the
++	  temperature set points and to read the current temperature.
++
++	  It is also possible to say M here to build it as a module (ds1620)
++	  It is recommended to be used on a NetWinder, but it is not a
++	  necessity.
++
++config NWBUTTON
++	tristate "NetWinder Button"
++	depends on ARCH_NETWINDER
++	help
++	  If you say Y here and create a character device node /dev/nwbutton
++	  with major and minor numbers 10 and 158 ("man mknod"), then every
++	  time the orange button is pressed a number of times, the number of
++	  times the button was pressed will be written to that device.
++
++	  This is most useful for applications, as yet unwritten, which
++	  perform actions based on how many times the button is pressed in a
++	  row.
++
++	  Do not hold the button down for too long, as the driver does not
++	  alter the behaviour of the hardware reset circuitry attached to the
++	  button; it will still execute a hard reset if the button is held
++	  down for longer than approximately five seconds.
++
++	  To compile this driver as a module, choose M here: the
++	  module will be called nwbutton.
++
++	  Most people will answer Y to this question and "Reboot Using Button"
++	  below to be able to initiate a system shutdown from the button.
++
++config NWBUTTON_REBOOT
++	bool "Reboot Using Button"
++	depends on NWBUTTON
++	help
++	  If you say Y here, then you will be able to initiate a system
++	  shutdown and reboot by pressing the orange button a number of times.
++	  The number of presses to initiate the shutdown is two by default,
++	  but this can be altered by modifying the value of NUM_PRESSES_REBOOT
++	  in nwbutton.h and recompiling the driver or, if you compile the
++	  driver as a module, you can specify the number of presses at load
++	  time with "insmod button reboot_count=<something>".
++
++config NWFLASH
++	tristate "NetWinder flash support"
++	depends on ARCH_NETWINDER
++	help
++	  If you say Y here and create a character device /dev/flash with
++	  major 10 and minor 160 you can manipulate the flash ROM containing
++	  the NetWinder firmware. Be careful as accidentally overwriting the
++	  flash contents can render your computer unbootable. On no account
++	  allow random users access to this device. :-)
++
++	  To compile this driver as a module, choose M here: the
++	  module will be called nwflash.
++
++	  If you're not sure, say N.
++
++source "drivers/char/hw_random/Kconfig"
++
++config DTLK
++	tristate "Double Talk PC internal speech card support"
++	depends on ISA
++	help
++	  This driver is for the DoubleTalk PC, a speech synthesizer
++	  manufactured by RC Systems (<https://www.rcsys.com/>).  It is also
++	  called the `internal DoubleTalk'.
++
++	  To compile this driver as a module, choose M here: the
++	  module will be called dtlk.
++
++config XILINX_HWICAP
++	tristate "Xilinx HWICAP Support"
++	depends on MICROBLAZE
++	help
++	  This option enables support for Xilinx Internal Configuration
++	  Access Port (ICAP) driver.  The ICAP is used on Xilinx Virtex
++	  FPGA platforms to partially reconfigure the FPGA at runtime.
++
++	  If unsure, say N.
++
++config APPLICOM
++	tristate "Applicom intelligent fieldbus card support"
++	depends on PCI
++	help
++	  This driver provides the kernel-side support for the intelligent
++	  fieldbus cards made by Applicom International. More information
++	  about these cards can be found on the WWW at the address
++	  <https://www.applicom-int.com/>, or by email from David Woodhouse
++	  <dwmw2@infradead.org>.
++
++	  To compile this driver as a module, choose M here: the
++	  module will be called applicom.
++
++	  If unsure, say N.
++
++config SONYPI
++	tristate "Sony Vaio Programmable I/O Control Device support"
++	depends on X86_32 && PCI && INPUT
++	depends on ACPI_EC || !ACPI
++	help
++	  This driver enables access to the Sony Programmable I/O Control
++	  Device which can be found in many (all ?) Sony Vaio laptops.
++
++	  If you have one of those laptops, read
++	  <file:Documentation/admin-guide/laptops/sonypi.rst>, and say Y or M here.
++
++	  To compile this driver as a module, choose M here: the
++	  module will be called sonypi.
++
++config MWAVE
++	tristate "ACP Modem (Mwave) support"
++	depends on X86 && TTY
++	select SERIAL_8250
++	help
++	  The ACP modem (Mwave) for Linux is a WinModem. It is composed of a
++	  kernel driver and a user level application. Together these components
++	  support direct attachment to public switched telephone networks (PSTNs)
++	  and support selected world wide countries.
++
++	  This version of the ACP Modem driver supports the IBM Thinkpad 600E,
++	  600, and 770 that include on board ACP modem hardware.
++
++	  The modem also supports the standard communications port interface
++	  (ttySx) and is compatible with the Hayes AT Command Set.
++
++	  The user level application needed to use this driver can be found at
++	  the IBM Linux Technology Center (LTC) web site:
++	  <http://www.ibm.com/linux/ltc/>.
++
++	  If you own one of the above IBM Thinkpads which has the Mwave chipset
++	  in it, say Y.
++
++	  To compile this driver as a module, choose M here: the
++	  module will be called mwave.
++
++config SCx200_GPIO
++	tristate "NatSemi SCx200 GPIO Support"
++	depends on SCx200
++	select NSC_GPIO
++	help
++	  Give userspace access to the GPIO pins on the National
++	  Semiconductor SCx200 processors.
++
++	  If compiled as a module, it will be called scx200_gpio.
++
++config PC8736x_GPIO
++	tristate "NatSemi PC8736x GPIO Support"
++	depends on X86_32 && !UML
++	default SCx200_GPIO	# mostly N
++	select NSC_GPIO		# needed for support routines
++	help
++	  Give userspace access to the GPIO pins on the National
++	  Semiconductor PC-8736x (x=[03456]) SuperIO chip.  The chip
++	  has multiple functional units, inc several managed by
++	  hwmon/pc87360 driver.  Tested with PC-87366
++
++	  If compiled as a module, it will be called pc8736x_gpio.
++
++config NSC_GPIO
++	tristate "NatSemi Base GPIO Support"
++	depends on X86_32
++	# selected by SCx200_GPIO and PC8736x_GPIO
++	# what about 2 selectors differing: m != y
++	help
++	  Common support used (and needed) by scx200_gpio and
++	  pc8736x_gpio drivers.  If those drivers are built as
++	  modules, this one will be too, named nsc_gpio
++
++config DEVMEM
++	bool "/dev/mem virtual device support"
++	default y
++	help
++	  Say Y here if you want to support the /dev/mem device.
++	  The /dev/mem device is used to access areas of physical
++	  memory.
++	  When in doubt, say "Y".
++
++config NVRAM
++	tristate "/dev/nvram support"
++	depends on X86 || HAVE_ARCH_NVRAM_OPS
++	default M68K || PPC
++	help
++	  If you say Y here and create a character special file /dev/nvram
++	  with major number 10 and minor number 144 using mknod ("man mknod"),
++	  you get read and write access to the non-volatile memory.
++
++	  /dev/nvram may be used to view settings in NVRAM or to change them
++	  (with some utility). It could also be used to frequently
++	  save a few bits of very important data that may not be lost over
++	  power-off and for which writing to disk is too insecure. Note
++	  however that most NVRAM space in a PC belongs to the BIOS and you
++	  should NEVER idly tamper with it. See Ralf Brown's interrupt list
++	  for a guide to the use of CMOS bytes by your BIOS.
++
++	  This memory is conventionally called "NVRAM" on PowerPC machines,
++	  "CMOS RAM" on PCs, "NVRAM" on Ataris and "PRAM" on Macintoshes.
++
++	  To compile this driver as a module, choose M here: the
++	  module will be called nvram.
++
++config DEVPORT
++	bool "/dev/port character device"
++	depends on HAS_IOPORT
++	default y
++	help
++	  Say Y here if you want to support the /dev/port device. The /dev/port
++	  device is similar to /dev/mem, but for I/O ports.
++
++config HPET
++	bool "HPET - High Precision Event Timer" if X86
++	default n
++	depends on ACPI
++	help
++	  If you say Y here, you will have a miscdevice named "/dev/hpet/".  Each
++	  open selects one of the timers supported by the HPET.  The timers are
++	  non-periodic and/or periodic.
++
++config HPET_MMAP
++	bool "Allow mmap of HPET"
++	default y
++	depends on HPET
++	help
++	  If you say Y here, user applications will be able to mmap
++	  the HPET registers.
++
++config HPET_MMAP_DEFAULT
++	bool "Enable HPET MMAP access by default"
++	default y
++	depends on HPET_MMAP
++	help
++	  In some hardware implementations, the page containing HPET
++	  registers may also contain other things that shouldn't be
++	  exposed to the user.  This option selects the default (if
++	  kernel parameter hpet_mmap is not set) user access to the
++	  registers for applications that require it.
++
++config HANGCHECK_TIMER
++	tristate "Hangcheck timer"
++	depends on X86 || PPC64 || S390
++	help
++	  The hangcheck-timer module detects when the system has gone
++	  out to lunch past a certain margin.  It can reboot the system
++	  or merely print a warning.
++
++config UV_MMTIMER
++	tristate "UV_MMTIMER Memory mapped RTC for SGI UV"
++	depends on X86_UV
++	default m
++	help
++	  The uv_mmtimer device allows direct userspace access to the
++	  UV system timer.
++
++source "drivers/char/tpm/Kconfig"
++
++config TELCLOCK
++	tristate "Telecom clock driver for ATCA SBC"
++	depends on X86
++	default n
++	help
++	  The telecom clock device is specific to the MPCBL0010 and MPCBL0050
++	  ATCA computers and allows direct userspace access to the
++	  configuration of the telecom clock configuration settings.  This
++	  device is used for hardware synchronization across the ATCA backplane
++	  fabric.  Upon loading, the driver exports a sysfs directory,
++	  /sys/devices/platform/telco_clock, with a number of files for
++	  controlling the behavior of this hardware.
++
++source "drivers/s390/char/Kconfig"
++
++source "drivers/char/xillybus/Kconfig"
++
++config ADI
++	tristate "SPARC Privileged ADI driver"
++	depends on SPARC64
++	default m
++	help
++	  SPARC M7 and newer processors utilize ADI (Application Data
++	  Integrity) to version and protect memory.  This driver provides
++	  read/write access to the ADI versions for privileged processes.
++	  This feature is also known as MCD (Memory Corruption Detection)
++	  and SSM (Silicon Secured Memory).  Intended consumers of this
++	  driver include crash and makedumpfile.
++
++endmenu
+diff -rupN old/linux-6.14/drivers/char/Makefile linux-6.14/drivers/char/Makefile
+--- old/linux-6.14/drivers/char/Makefile	2025-03-24 10:02:41.000000000 -0400
++++ linux-6.14/drivers/char/Makefile	2025-03-29 07:43:35.027218207 -0400
+@@ -43,3 +43,5 @@ obj-$(CONFIG_PS3_FLASH)		+= ps3flash.o
+ obj-$(CONFIG_XILLYBUS_CLASS)	+= xillybus/
+ obj-$(CONFIG_POWERNV_OP_PANEL)	+= powernv-op-panel.o
+ obj-$(CONFIG_ADI)		+= adi.o
++obj-$(CONFIG_DEVCMA)		+= cma.o
++obj-$(CONFIG_XILINX_DEVCFG)	+= xilinx_devcfg.o
+diff -rupN old/linux-6.14/drivers/net/phy/intel-xway.c linux-6.14/drivers/net/phy/intel-xway.c
+--- old/linux-6.14/drivers/net/phy/intel-xway.c	2025-03-24 10:02:41.000000000 -0400
++++ linux-6.14/drivers/net/phy/intel-xway.c	2025-03-29 07:43:35.027322076 -0400
+@@ -251,6 +251,12 @@ static int xway_gphy_init_leds(struct ph
+ 	if (err)
+ 		return err;
+ 
++	/* Set SGMII RX & TX timing skew to 2 ns & 2.5 ns respectively. */
++	/* Set MII power supply to 2V5. */
++	err = phy_write(phydev, 0x17, 0x4D00);
++	if (err)
++		return err;
++
+ 	phy_write_mmd(phydev, MDIO_MMD_VEND2, XWAY_MMD_LEDCH,
+ 		      XWAY_MMD_LEDCH_NACS_NONE |
+ 		      XWAY_MMD_LEDCH_SBF_F02HZ |
+@@ -260,20 +266,16 @@ static int xway_gphy_init_leds(struct ph
+ 		      XWAY_MMD_LEDCH_SCAN_NONE);
+ 
+ 	/**
+-	 * In most cases only one LED is connected to this phy, so
+-	 * configure them all to constant on and pulse mode. LED3 is
+-	 * only available in some packages, leave it in its reset
+-	 * configuration.
++	 * Set LED0 blinking on RX/TX.
++	 * Set LED1 blinking on link speed: slow=10M, fast=100M, on=1G.
+ 	 */
+-	ledxh = XWAY_MMD_LEDxH_BLINKF_NONE | XWAY_MMD_LEDxH_CON_LINK10XX;
+-	ledxl = XWAY_MMD_LEDxL_PULSE_TXACT | XWAY_MMD_LEDxL_PULSE_RXACT |
+-		XWAY_MMD_LEDxL_BLINKS_NONE;
+-	phy_write_mmd(phydev, MDIO_MMD_VEND2, XWAY_MMD_LED0H, ledxh);
++	ledxl = XWAY_MMD_LEDxL_PULSE_TXACT | XWAY_MMD_LEDxL_PULSE_RXACT;
++	phy_write_mmd(phydev, MDIO_MMD_VEND2, XWAY_MMD_LED0H, 0);
+ 	phy_write_mmd(phydev, MDIO_MMD_VEND2, XWAY_MMD_LED0L, ledxl);
++	ledxh = XWAY_MMD_LEDxH_CON_LINK1000 | XWAY_MMD_LEDxH_BLINKF_LINK100;
++	ledxl = XWAY_MMD_LEDxH_CON_LINK10;
+ 	phy_write_mmd(phydev, MDIO_MMD_VEND2, XWAY_MMD_LED1H, ledxh);
+ 	phy_write_mmd(phydev, MDIO_MMD_VEND2, XWAY_MMD_LED1L, ledxl);
+-	phy_write_mmd(phydev, MDIO_MMD_VEND2, XWAY_MMD_LED2H, ledxh);
+-	phy_write_mmd(phydev, MDIO_MMD_VEND2, XWAY_MMD_LED2L, ledxl);
+ 
+ 	return 0;
+ }
+diff -rupN old/linux-6.14/drivers/net/phy/intel-xway.c.orig linux-6.14/drivers/net/phy/intel-xway.c.orig
+--- old/linux-6.14/drivers/net/phy/intel-xway.c.orig	1969-12-31 19:00:00.000000000 -0500
++++ linux-6.14/drivers/net/phy/intel-xway.c.orig	2025-03-24 10:02:41.000000000 -0400
+@@ -0,0 +1,710 @@
++// SPDX-License-Identifier: GPL-2.0+
++/*
++ * Copyright (C) 2012 Daniel Schwierzeck <daniel.schwierzeck@googlemail.com>
++ * Copyright (C) 2016 Hauke Mehrtens <hauke@hauke-m.de>
++ */
++
++#include <linux/mdio.h>
++#include <linux/module.h>
++#include <linux/phy.h>
++#include <linux/of.h>
++#include <linux/bitfield.h>
++
++#define XWAY_MDIO_MIICTRL		0x17	/* mii control */
++#define XWAY_MDIO_IMASK			0x19	/* interrupt mask */
++#define XWAY_MDIO_ISTAT			0x1A	/* interrupt status */
++#define XWAY_MDIO_LED			0x1B	/* led control */
++
++#define XWAY_MDIO_MIICTRL_RXSKEW_MASK	GENMASK(14, 12)
++#define XWAY_MDIO_MIICTRL_TXSKEW_MASK	GENMASK(10, 8)
++
++/* bit 15:12 are reserved */
++#define XWAY_MDIO_LED_LED3_EN		BIT(11)	/* Enable the integrated function of LED3 */
++#define XWAY_MDIO_LED_LED2_EN		BIT(10)	/* Enable the integrated function of LED2 */
++#define XWAY_MDIO_LED_LED1_EN		BIT(9)	/* Enable the integrated function of LED1 */
++#define XWAY_MDIO_LED_LED0_EN		BIT(8)	/* Enable the integrated function of LED0 */
++/* bit 7:4 are reserved */
++#define XWAY_MDIO_LED_LED3_DA		BIT(3)	/* Direct Access to LED3 */
++#define XWAY_MDIO_LED_LED2_DA		BIT(2)	/* Direct Access to LED2 */
++#define XWAY_MDIO_LED_LED1_DA		BIT(1)	/* Direct Access to LED1 */
++#define XWAY_MDIO_LED_LED0_DA		BIT(0)	/* Direct Access to LED0 */
++
++#define XWAY_MDIO_INIT_WOL		BIT(15)	/* Wake-On-LAN */
++#define XWAY_MDIO_INIT_MSRE		BIT(14)
++#define XWAY_MDIO_INIT_NPRX		BIT(13)
++#define XWAY_MDIO_INIT_NPTX		BIT(12)
++#define XWAY_MDIO_INIT_ANE		BIT(11)	/* Auto-Neg error */
++#define XWAY_MDIO_INIT_ANC		BIT(10)	/* Auto-Neg complete */
++#define XWAY_MDIO_INIT_ADSC		BIT(5)	/* Link auto-downspeed detect */
++#define XWAY_MDIO_INIT_MPIPC		BIT(4)
++#define XWAY_MDIO_INIT_MDIXC		BIT(3)
++#define XWAY_MDIO_INIT_DXMC		BIT(2)	/* Duplex mode change */
++#define XWAY_MDIO_INIT_LSPC		BIT(1)	/* Link speed change */
++#define XWAY_MDIO_INIT_LSTC		BIT(0)	/* Link state change */
++#define XWAY_MDIO_INIT_MASK		(XWAY_MDIO_INIT_LSTC | \
++					 XWAY_MDIO_INIT_ADSC)
++
++#define ADVERTISED_MPD			BIT(10)	/* Multi-port device */
++
++/* LED Configuration */
++#define XWAY_MMD_LEDCH			0x01E0
++/* Inverse of SCAN Function */
++#define  XWAY_MMD_LEDCH_NACS_NONE	0x0000
++#define  XWAY_MMD_LEDCH_NACS_LINK	0x0001
++#define  XWAY_MMD_LEDCH_NACS_PDOWN	0x0002
++#define  XWAY_MMD_LEDCH_NACS_EEE	0x0003
++#define  XWAY_MMD_LEDCH_NACS_ANEG	0x0004
++#define  XWAY_MMD_LEDCH_NACS_ABIST	0x0005
++#define  XWAY_MMD_LEDCH_NACS_CDIAG	0x0006
++#define  XWAY_MMD_LEDCH_NACS_TEST	0x0007
++/* Slow Blink Frequency */
++#define  XWAY_MMD_LEDCH_SBF_F02HZ	0x0000
++#define  XWAY_MMD_LEDCH_SBF_F04HZ	0x0010
++#define  XWAY_MMD_LEDCH_SBF_F08HZ	0x0020
++#define  XWAY_MMD_LEDCH_SBF_F16HZ	0x0030
++/* Fast Blink Frequency */
++#define  XWAY_MMD_LEDCH_FBF_F02HZ	0x0000
++#define  XWAY_MMD_LEDCH_FBF_F04HZ	0x0040
++#define  XWAY_MMD_LEDCH_FBF_F08HZ	0x0080
++#define  XWAY_MMD_LEDCH_FBF_F16HZ	0x00C0
++/* LED Configuration */
++#define XWAY_MMD_LEDCL			0x01E1
++/* Complex Blinking Configuration */
++#define  XWAY_MMD_LEDCH_CBLINK_NONE	0x0000
++#define  XWAY_MMD_LEDCH_CBLINK_LINK	0x0001
++#define  XWAY_MMD_LEDCH_CBLINK_PDOWN	0x0002
++#define  XWAY_MMD_LEDCH_CBLINK_EEE	0x0003
++#define  XWAY_MMD_LEDCH_CBLINK_ANEG	0x0004
++#define  XWAY_MMD_LEDCH_CBLINK_ABIST	0x0005
++#define  XWAY_MMD_LEDCH_CBLINK_CDIAG	0x0006
++#define  XWAY_MMD_LEDCH_CBLINK_TEST	0x0007
++/* Complex SCAN Configuration */
++#define  XWAY_MMD_LEDCH_SCAN_NONE	0x0000
++#define  XWAY_MMD_LEDCH_SCAN_LINK	0x0010
++#define  XWAY_MMD_LEDCH_SCAN_PDOWN	0x0020
++#define  XWAY_MMD_LEDCH_SCAN_EEE	0x0030
++#define  XWAY_MMD_LEDCH_SCAN_ANEG	0x0040
++#define  XWAY_MMD_LEDCH_SCAN_ABIST	0x0050
++#define  XWAY_MMD_LEDCH_SCAN_CDIAG	0x0060
++#define  XWAY_MMD_LEDCH_SCAN_TEST	0x0070
++/* Configuration for LED Pin x */
++#define XWAY_MMD_LED0H			0x01E2
++/* Fast Blinking Configuration */
++#define  XWAY_MMD_LEDxH_BLINKF_MASK	0x000F
++#define  XWAY_MMD_LEDxH_BLINKF_NONE	0x0000
++#define  XWAY_MMD_LEDxH_BLINKF_LINK10	0x0001
++#define  XWAY_MMD_LEDxH_BLINKF_LINK100	0x0002
++#define  XWAY_MMD_LEDxH_BLINKF_LINK10X	0x0003
++#define  XWAY_MMD_LEDxH_BLINKF_LINK1000	0x0004
++#define  XWAY_MMD_LEDxH_BLINKF_LINK10_0	0x0005
++#define  XWAY_MMD_LEDxH_BLINKF_LINK100X	0x0006
++#define  XWAY_MMD_LEDxH_BLINKF_LINK10XX	0x0007
++#define  XWAY_MMD_LEDxH_BLINKF_PDOWN	0x0008
++#define  XWAY_MMD_LEDxH_BLINKF_EEE	0x0009
++#define  XWAY_MMD_LEDxH_BLINKF_ANEG	0x000A
++#define  XWAY_MMD_LEDxH_BLINKF_ABIST	0x000B
++#define  XWAY_MMD_LEDxH_BLINKF_CDIAG	0x000C
++/* Constant On Configuration */
++#define  XWAY_MMD_LEDxH_CON_MASK	0x00F0
++#define  XWAY_MMD_LEDxH_CON_NONE	0x0000
++#define  XWAY_MMD_LEDxH_CON_LINK10	0x0010
++#define  XWAY_MMD_LEDxH_CON_LINK100	0x0020
++#define  XWAY_MMD_LEDxH_CON_LINK10X	0x0030
++#define  XWAY_MMD_LEDxH_CON_LINK1000	0x0040
++#define  XWAY_MMD_LEDxH_CON_LINK10_0	0x0050
++#define  XWAY_MMD_LEDxH_CON_LINK100X	0x0060
++#define  XWAY_MMD_LEDxH_CON_LINK10XX	0x0070
++#define  XWAY_MMD_LEDxH_CON_PDOWN	0x0080
++#define  XWAY_MMD_LEDxH_CON_EEE		0x0090
++#define  XWAY_MMD_LEDxH_CON_ANEG	0x00A0
++#define  XWAY_MMD_LEDxH_CON_ABIST	0x00B0
++#define  XWAY_MMD_LEDxH_CON_CDIAG	0x00C0
++#define  XWAY_MMD_LEDxH_CON_COPPER	0x00D0
++#define  XWAY_MMD_LEDxH_CON_FIBER	0x00E0
++/* Configuration for LED Pin x */
++#define XWAY_MMD_LED0L			0x01E3
++/* Pulsing Configuration */
++#define  XWAY_MMD_LEDxL_PULSE_MASK	0x000F
++#define  XWAY_MMD_LEDxL_PULSE_NONE	0x0000
++#define  XWAY_MMD_LEDxL_PULSE_TXACT	0x0001
++#define  XWAY_MMD_LEDxL_PULSE_RXACT	0x0002
++#define  XWAY_MMD_LEDxL_PULSE_COL	0x0004
++/* Slow Blinking Configuration */
++#define  XWAY_MMD_LEDxL_BLINKS_MASK	0x00F0
++#define  XWAY_MMD_LEDxL_BLINKS_NONE	0x0000
++#define  XWAY_MMD_LEDxL_BLINKS_LINK10	0x0010
++#define  XWAY_MMD_LEDxL_BLINKS_LINK100	0x0020
++#define  XWAY_MMD_LEDxL_BLINKS_LINK10X	0x0030
++#define  XWAY_MMD_LEDxL_BLINKS_LINK1000	0x0040
++#define  XWAY_MMD_LEDxL_BLINKS_LINK10_0	0x0050
++#define  XWAY_MMD_LEDxL_BLINKS_LINK100X	0x0060
++#define  XWAY_MMD_LEDxL_BLINKS_LINK10XX	0x0070
++#define  XWAY_MMD_LEDxL_BLINKS_PDOWN	0x0080
++#define  XWAY_MMD_LEDxL_BLINKS_EEE	0x0090
++#define  XWAY_MMD_LEDxL_BLINKS_ANEG	0x00A0
++#define  XWAY_MMD_LEDxL_BLINKS_ABIST	0x00B0
++#define  XWAY_MMD_LEDxL_BLINKS_CDIAG	0x00C0
++#define XWAY_MMD_LED1H			0x01E4
++#define XWAY_MMD_LED1L			0x01E5
++#define XWAY_MMD_LED2H			0x01E6
++#define XWAY_MMD_LED2L			0x01E7
++#define XWAY_MMD_LED3H			0x01E8
++#define XWAY_MMD_LED3L			0x01E9
++
++#define XWAY_GPHY_MAX_LEDS		3
++#define XWAY_GPHY_LED_INV(idx)		BIT(12 + (idx))
++#define XWAY_GPHY_LED_EN(idx)		BIT(8 + (idx))
++#define XWAY_GPHY_LED_DA(idx)		BIT(idx)
++#define XWAY_MMD_LEDxH(idx)		(XWAY_MMD_LED0H + 2 * (idx))
++#define XWAY_MMD_LEDxL(idx)		(XWAY_MMD_LED0L + 2 * (idx))
++
++#define PHY_ID_PHY11G_1_3		0x030260D1
++#define PHY_ID_PHY22F_1_3		0x030260E1
++#define PHY_ID_PHY11G_1_4		0xD565A400
++#define PHY_ID_PHY22F_1_4		0xD565A410
++#define PHY_ID_PHY11G_1_5		0xD565A401
++#define PHY_ID_PHY22F_1_5		0xD565A411
++#define PHY_ID_PHY11G_VR9_1_1		0xD565A408
++#define PHY_ID_PHY22F_VR9_1_1		0xD565A418
++#define PHY_ID_PHY11G_VR9_1_2		0xD565A409
++#define PHY_ID_PHY22F_VR9_1_2		0xD565A419
++
++static const int xway_internal_delay[] = {0, 500, 1000, 1500, 2000, 2500,
++					 3000, 3500};
++
++static int xway_gphy_rgmii_init(struct phy_device *phydev)
++{
++	struct device *dev = &phydev->mdio.dev;
++	unsigned int delay_size = ARRAY_SIZE(xway_internal_delay);
++	s32 int_delay;
++	int val = 0;
++
++	if (!phy_interface_is_rgmii(phydev))
++		return 0;
++
++	/* Existing behavior was to use default pin strapping delay in rgmii
++	 * mode, but rgmii should have meant no delay.  Warn existing users,
++	 * but do not change anything at the moment.
++	 */
++	if (phydev->interface == PHY_INTERFACE_MODE_RGMII) {
++		u16 txskew, rxskew;
++
++		val = phy_read(phydev, XWAY_MDIO_MIICTRL);
++		if (val < 0)
++			return val;
++
++		txskew = FIELD_GET(XWAY_MDIO_MIICTRL_TXSKEW_MASK, val);
++		rxskew = FIELD_GET(XWAY_MDIO_MIICTRL_RXSKEW_MASK, val);
++
++		if (txskew > 0 || rxskew > 0)
++			phydev_warn(phydev,
++				    "PHY has delays (e.g. via pin strapping), but phy-mode = 'rgmii'\n"
++				    "Should be 'rgmii-id' to use internal delays txskew:%d ps rxskew:%d ps\n",
++				    xway_internal_delay[txskew],
++				    xway_internal_delay[rxskew]);
++		return 0;
++	}
++
++	if (phydev->interface == PHY_INTERFACE_MODE_RGMII_ID ||
++	    phydev->interface == PHY_INTERFACE_MODE_RGMII_RXID) {
++		int_delay = phy_get_internal_delay(phydev, dev,
++						   xway_internal_delay,
++						   delay_size, true);
++
++		/* if rx-internal-delay-ps is missing, use default of 2.0 ns */
++		if (int_delay < 0)
++			int_delay = 4; /* 2000 ps */
++
++		val |= FIELD_PREP(XWAY_MDIO_MIICTRL_RXSKEW_MASK, int_delay);
++	}
++
++	if (phydev->interface == PHY_INTERFACE_MODE_RGMII_ID ||
++	    phydev->interface == PHY_INTERFACE_MODE_RGMII_TXID) {
++		int_delay = phy_get_internal_delay(phydev, dev,
++						   xway_internal_delay,
++						   delay_size, false);
++
++		/* if tx-internal-delay-ps is missing, use default of 2.0 ns */
++		if (int_delay < 0)
++			int_delay = 4; /* 2000 ps */
++
++		val |= FIELD_PREP(XWAY_MDIO_MIICTRL_TXSKEW_MASK, int_delay);
++	}
++
++	return phy_modify(phydev, XWAY_MDIO_MIICTRL,
++			  XWAY_MDIO_MIICTRL_RXSKEW_MASK |
++			  XWAY_MDIO_MIICTRL_TXSKEW_MASK, val);
++}
++
++static int xway_gphy_init_leds(struct phy_device *phydev)
++{
++	int err;
++	u32 ledxh;
++	u32 ledxl;
++
++	/* Ensure that integrated led function is enabled for all leds */
++	err = phy_write(phydev, XWAY_MDIO_LED,
++			XWAY_MDIO_LED_LED0_EN |
++			XWAY_MDIO_LED_LED1_EN |
++			XWAY_MDIO_LED_LED2_EN |
++			XWAY_MDIO_LED_LED3_EN);
++	if (err)
++		return err;
++
++	phy_write_mmd(phydev, MDIO_MMD_VEND2, XWAY_MMD_LEDCH,
++		      XWAY_MMD_LEDCH_NACS_NONE |
++		      XWAY_MMD_LEDCH_SBF_F02HZ |
++		      XWAY_MMD_LEDCH_FBF_F16HZ);
++	phy_write_mmd(phydev, MDIO_MMD_VEND2, XWAY_MMD_LEDCL,
++		      XWAY_MMD_LEDCH_CBLINK_NONE |
++		      XWAY_MMD_LEDCH_SCAN_NONE);
++
++	/**
++	 * In most cases only one LED is connected to this phy, so
++	 * configure them all to constant on and pulse mode. LED3 is
++	 * only available in some packages, leave it in its reset
++	 * configuration.
++	 */
++	ledxh = XWAY_MMD_LEDxH_BLINKF_NONE | XWAY_MMD_LEDxH_CON_LINK10XX;
++	ledxl = XWAY_MMD_LEDxL_PULSE_TXACT | XWAY_MMD_LEDxL_PULSE_RXACT |
++		XWAY_MMD_LEDxL_BLINKS_NONE;
++	phy_write_mmd(phydev, MDIO_MMD_VEND2, XWAY_MMD_LED0H, ledxh);
++	phy_write_mmd(phydev, MDIO_MMD_VEND2, XWAY_MMD_LED0L, ledxl);
++	phy_write_mmd(phydev, MDIO_MMD_VEND2, XWAY_MMD_LED1H, ledxh);
++	phy_write_mmd(phydev, MDIO_MMD_VEND2, XWAY_MMD_LED1L, ledxl);
++	phy_write_mmd(phydev, MDIO_MMD_VEND2, XWAY_MMD_LED2H, ledxh);
++	phy_write_mmd(phydev, MDIO_MMD_VEND2, XWAY_MMD_LED2L, ledxl);
++
++	return 0;
++}
++
++static int xway_gphy_config_init(struct phy_device *phydev)
++{
++	struct device_node *np = phydev->mdio.dev.of_node;
++	int err;
++
++	/* Mask all interrupts */
++	err = phy_write(phydev, XWAY_MDIO_IMASK, 0);
++	if (err)
++		return err;
++
++	/* Use default LED configuration if 'leds' node isn't defined */
++	if (!of_get_child_by_name(np, "leds"))
++		xway_gphy_init_leds(phydev);
++
++	/* Clear all pending interrupts */
++	phy_read(phydev, XWAY_MDIO_ISTAT);
++
++	err = xway_gphy_rgmii_init(phydev);
++	if (err)
++		return err;
++
++	return 0;
++}
++
++static int xway_gphy14_config_aneg(struct phy_device *phydev)
++{
++	int reg, err;
++
++	/* Advertise as multi-port device, see IEEE802.3-2002 40.5.1.1 */
++	/* This is a workaround for an errata in rev < 1.5 devices */
++	reg = phy_read(phydev, MII_CTRL1000);
++	reg |= ADVERTISED_MPD;
++	err = phy_write(phydev, MII_CTRL1000, reg);
++	if (err)
++		return err;
++
++	return genphy_config_aneg(phydev);
++}
++
++static int xway_gphy_ack_interrupt(struct phy_device *phydev)
++{
++	int reg;
++
++	reg = phy_read(phydev, XWAY_MDIO_ISTAT);
++	return (reg < 0) ? reg : 0;
++}
++
++static int xway_gphy_config_intr(struct phy_device *phydev)
++{
++	u16 mask = 0;
++	int err;
++
++	if (phydev->interrupts == PHY_INTERRUPT_ENABLED) {
++		err = xway_gphy_ack_interrupt(phydev);
++		if (err)
++			return err;
++
++		mask = XWAY_MDIO_INIT_MASK;
++		err = phy_write(phydev, XWAY_MDIO_IMASK, mask);
++	} else {
++		err = phy_write(phydev, XWAY_MDIO_IMASK, mask);
++		if (err)
++			return err;
++
++		err = xway_gphy_ack_interrupt(phydev);
++	}
++
++	return err;
++}
++
++static irqreturn_t xway_gphy_handle_interrupt(struct phy_device *phydev)
++{
++	int irq_status;
++
++	irq_status = phy_read(phydev, XWAY_MDIO_ISTAT);
++	if (irq_status < 0) {
++		phy_error(phydev);
++		return IRQ_NONE;
++	}
++
++	if (!(irq_status & XWAY_MDIO_INIT_MASK))
++		return IRQ_NONE;
++
++	phy_trigger_machine(phydev);
++
++	return IRQ_HANDLED;
++}
++
++static int xway_gphy_led_brightness_set(struct phy_device *phydev,
++					u8 index, enum led_brightness value)
++{
++	int ret;
++
++	if (index >= XWAY_GPHY_MAX_LEDS)
++		return -EINVAL;
++
++	/* clear EN and set manual LED state */
++	ret = phy_modify(phydev, XWAY_MDIO_LED,
++			 ((value == LED_OFF) ? XWAY_GPHY_LED_EN(index) : 0) |
++			 XWAY_GPHY_LED_DA(index),
++			 (value == LED_OFF) ? 0 : XWAY_GPHY_LED_DA(index));
++	if (ret)
++		return ret;
++
++	/* clear HW LED setup */
++	if (value == LED_OFF) {
++		ret = phy_write_mmd(phydev, MDIO_MMD_VEND2, XWAY_MMD_LEDxH(index), 0);
++		if (ret)
++			return ret;
++
++		return phy_write_mmd(phydev, MDIO_MMD_VEND2, XWAY_MMD_LEDxL(index), 0);
++	} else {
++		return 0;
++	}
++}
++
++static const unsigned long supported_triggers = (BIT(TRIGGER_NETDEV_LINK) |
++						 BIT(TRIGGER_NETDEV_LINK_10) |
++						 BIT(TRIGGER_NETDEV_LINK_100) |
++						 BIT(TRIGGER_NETDEV_LINK_1000) |
++						 BIT(TRIGGER_NETDEV_RX) |
++						 BIT(TRIGGER_NETDEV_TX));
++
++static int xway_gphy_led_hw_is_supported(struct phy_device *phydev, u8 index,
++					 unsigned long rules)
++{
++	if (index >= XWAY_GPHY_MAX_LEDS)
++		return -EINVAL;
++
++	/* activity triggers are not possible without combination with a link
++	 * trigger.
++	 */
++	if (rules & (BIT(TRIGGER_NETDEV_RX) | BIT(TRIGGER_NETDEV_TX)) &&
++	    !(rules & (BIT(TRIGGER_NETDEV_LINK) |
++		       BIT(TRIGGER_NETDEV_LINK_10) |
++		       BIT(TRIGGER_NETDEV_LINK_100) |
++		       BIT(TRIGGER_NETDEV_LINK_1000))))
++		return -EOPNOTSUPP;
++
++	/* All other combinations of the supported triggers are allowed */
++	if (rules & ~supported_triggers)
++		return -EOPNOTSUPP;
++
++	return 0;
++}
++
++static int xway_gphy_led_hw_control_get(struct phy_device *phydev, u8 index,
++					unsigned long *rules)
++{
++	int lval, hval;
++
++	if (index >= XWAY_GPHY_MAX_LEDS)
++		return -EINVAL;
++
++	hval = phy_read_mmd(phydev, MDIO_MMD_VEND2, XWAY_MMD_LEDxH(index));
++	if (hval < 0)
++		return hval;
++
++	lval = phy_read_mmd(phydev, MDIO_MMD_VEND2, XWAY_MMD_LEDxL(index));
++	if (lval < 0)
++		return lval;
++
++	if (hval & XWAY_MMD_LEDxH_CON_LINK10)
++		*rules |= BIT(TRIGGER_NETDEV_LINK_10);
++
++	if (hval & XWAY_MMD_LEDxH_CON_LINK100)
++		*rules |= BIT(TRIGGER_NETDEV_LINK_100);
++
++	if (hval & XWAY_MMD_LEDxH_CON_LINK1000)
++		*rules |= BIT(TRIGGER_NETDEV_LINK_1000);
++
++	if ((hval & XWAY_MMD_LEDxH_CON_LINK10) &&
++	    (hval & XWAY_MMD_LEDxH_CON_LINK100) &&
++	    (hval & XWAY_MMD_LEDxH_CON_LINK1000))
++		*rules |= BIT(TRIGGER_NETDEV_LINK);
++
++	if (lval & XWAY_MMD_LEDxL_PULSE_TXACT)
++		*rules |= BIT(TRIGGER_NETDEV_TX);
++
++	if (lval & XWAY_MMD_LEDxL_PULSE_RXACT)
++		*rules |= BIT(TRIGGER_NETDEV_RX);
++
++	return 0;
++}
++
++static int xway_gphy_led_hw_control_set(struct phy_device *phydev, u8 index,
++					unsigned long rules)
++{
++	u16 hval = 0, lval = 0;
++	int ret;
++
++	if (index >= XWAY_GPHY_MAX_LEDS)
++		return -EINVAL;
++
++	if (rules & BIT(TRIGGER_NETDEV_LINK) ||
++	    rules & BIT(TRIGGER_NETDEV_LINK_10))
++		hval |= XWAY_MMD_LEDxH_CON_LINK10;
++
++	if (rules & BIT(TRIGGER_NETDEV_LINK) ||
++	    rules & BIT(TRIGGER_NETDEV_LINK_100))
++		hval |= XWAY_MMD_LEDxH_CON_LINK100;
++
++	if (rules & BIT(TRIGGER_NETDEV_LINK) ||
++	    rules & BIT(TRIGGER_NETDEV_LINK_1000))
++		hval |= XWAY_MMD_LEDxH_CON_LINK1000;
++
++	if (rules & BIT(TRIGGER_NETDEV_TX))
++		lval |= XWAY_MMD_LEDxL_PULSE_TXACT;
++
++	if (rules & BIT(TRIGGER_NETDEV_RX))
++		lval |= XWAY_MMD_LEDxL_PULSE_RXACT;
++
++	ret = phy_write_mmd(phydev, MDIO_MMD_VEND2, XWAY_MMD_LEDxH(index), hval);
++	if (ret)
++		return ret;
++
++	ret = phy_write_mmd(phydev, MDIO_MMD_VEND2, XWAY_MMD_LEDxL(index), lval);
++	if (ret)
++		return ret;
++
++	return phy_set_bits(phydev, XWAY_MDIO_LED, XWAY_GPHY_LED_EN(index));
++}
++
++static int xway_gphy_led_polarity_set(struct phy_device *phydev, int index,
++				      unsigned long modes)
++{
++	bool force_active_low = false, force_active_high = false;
++	u32 mode;
++
++	if (index >= XWAY_GPHY_MAX_LEDS)
++		return -EINVAL;
++
++	for_each_set_bit(mode, &modes, __PHY_LED_MODES_NUM) {
++		switch (mode) {
++		case PHY_LED_ACTIVE_LOW:
++			force_active_low = true;
++			break;
++		case PHY_LED_ACTIVE_HIGH:
++			force_active_high = true;
++			break;
++		default:
++			return -EINVAL;
++		}
++	}
++
++	if (force_active_low)
++		return phy_set_bits(phydev, XWAY_MDIO_LED, XWAY_GPHY_LED_INV(index));
++
++	if (force_active_high)
++		return phy_clear_bits(phydev, XWAY_MDIO_LED, XWAY_GPHY_LED_INV(index));
++
++	return -EINVAL;
++}
++
++static struct phy_driver xway_gphy[] = {
++	{
++		.phy_id		= PHY_ID_PHY11G_1_3,
++		.phy_id_mask	= 0xffffffff,
++		.name		= "Intel XWAY PHY11G (PEF 7071/PEF 7072) v1.3",
++		/* PHY_GBIT_FEATURES */
++		.config_init	= xway_gphy_config_init,
++		.config_aneg	= xway_gphy14_config_aneg,
++		.handle_interrupt = xway_gphy_handle_interrupt,
++		.config_intr	= xway_gphy_config_intr,
++		.suspend	= genphy_suspend,
++		.resume		= genphy_resume,
++		.led_brightness_set = xway_gphy_led_brightness_set,
++		.led_hw_is_supported = xway_gphy_led_hw_is_supported,
++		.led_hw_control_get = xway_gphy_led_hw_control_get,
++		.led_hw_control_set = xway_gphy_led_hw_control_set,
++		.led_polarity_set = xway_gphy_led_polarity_set,
++	}, {
++		.phy_id		= PHY_ID_PHY22F_1_3,
++		.phy_id_mask	= 0xffffffff,
++		.name		= "Intel XWAY PHY22F (PEF 7061) v1.3",
++		/* PHY_BASIC_FEATURES */
++		.config_init	= xway_gphy_config_init,
++		.config_aneg	= xway_gphy14_config_aneg,
++		.handle_interrupt = xway_gphy_handle_interrupt,
++		.config_intr	= xway_gphy_config_intr,
++		.suspend	= genphy_suspend,
++		.resume		= genphy_resume,
++		.led_brightness_set = xway_gphy_led_brightness_set,
++		.led_hw_is_supported = xway_gphy_led_hw_is_supported,
++		.led_hw_control_get = xway_gphy_led_hw_control_get,
++		.led_hw_control_set = xway_gphy_led_hw_control_set,
++		.led_polarity_set = xway_gphy_led_polarity_set,
++	}, {
++		.phy_id		= PHY_ID_PHY11G_1_4,
++		.phy_id_mask	= 0xffffffff,
++		.name		= "Intel XWAY PHY11G (PEF 7071/PEF 7072) v1.4",
++		/* PHY_GBIT_FEATURES */
++		.config_init	= xway_gphy_config_init,
++		.config_aneg	= xway_gphy14_config_aneg,
++		.handle_interrupt = xway_gphy_handle_interrupt,
++		.config_intr	= xway_gphy_config_intr,
++		.suspend	= genphy_suspend,
++		.resume		= genphy_resume,
++		.led_brightness_set = xway_gphy_led_brightness_set,
++		.led_hw_is_supported = xway_gphy_led_hw_is_supported,
++		.led_hw_control_get = xway_gphy_led_hw_control_get,
++		.led_hw_control_set = xway_gphy_led_hw_control_set,
++		.led_polarity_set = xway_gphy_led_polarity_set,
++	}, {
++		.phy_id		= PHY_ID_PHY22F_1_4,
++		.phy_id_mask	= 0xffffffff,
++		.name		= "Intel XWAY PHY22F (PEF 7061) v1.4",
++		/* PHY_BASIC_FEATURES */
++		.config_init	= xway_gphy_config_init,
++		.config_aneg	= xway_gphy14_config_aneg,
++		.handle_interrupt = xway_gphy_handle_interrupt,
++		.config_intr	= xway_gphy_config_intr,
++		.suspend	= genphy_suspend,
++		.resume		= genphy_resume,
++		.led_brightness_set = xway_gphy_led_brightness_set,
++		.led_hw_is_supported = xway_gphy_led_hw_is_supported,
++		.led_hw_control_get = xway_gphy_led_hw_control_get,
++		.led_hw_control_set = xway_gphy_led_hw_control_set,
++		.led_polarity_set = xway_gphy_led_polarity_set,
++	}, {
++		.phy_id		= PHY_ID_PHY11G_1_5,
++		.phy_id_mask	= 0xffffffff,
++		.name		= "Intel XWAY PHY11G (PEF 7071/PEF 7072) v1.5 / v1.6",
++		/* PHY_GBIT_FEATURES */
++		.config_init	= xway_gphy_config_init,
++		.handle_interrupt = xway_gphy_handle_interrupt,
++		.config_intr	= xway_gphy_config_intr,
++		.suspend	= genphy_suspend,
++		.resume		= genphy_resume,
++		.led_brightness_set = xway_gphy_led_brightness_set,
++		.led_hw_is_supported = xway_gphy_led_hw_is_supported,
++		.led_hw_control_get = xway_gphy_led_hw_control_get,
++		.led_hw_control_set = xway_gphy_led_hw_control_set,
++		.led_polarity_set = xway_gphy_led_polarity_set,
++	}, {
++		.phy_id		= PHY_ID_PHY22F_1_5,
++		.phy_id_mask	= 0xffffffff,
++		.name		= "Intel XWAY PHY22F (PEF 7061) v1.5 / v1.6",
++		/* PHY_BASIC_FEATURES */
++		.config_init	= xway_gphy_config_init,
++		.handle_interrupt = xway_gphy_handle_interrupt,
++		.config_intr	= xway_gphy_config_intr,
++		.suspend	= genphy_suspend,
++		.resume		= genphy_resume,
++		.led_brightness_set = xway_gphy_led_brightness_set,
++		.led_hw_is_supported = xway_gphy_led_hw_is_supported,
++		.led_hw_control_get = xway_gphy_led_hw_control_get,
++		.led_hw_control_set = xway_gphy_led_hw_control_set,
++		.led_polarity_set = xway_gphy_led_polarity_set,
++	}, {
++		.phy_id		= PHY_ID_PHY11G_VR9_1_1,
++		.phy_id_mask	= 0xffffffff,
++		.name		= "Intel XWAY PHY11G (xRX v1.1 integrated)",
++		/* PHY_GBIT_FEATURES */
++		.config_init	= xway_gphy_config_init,
++		.handle_interrupt = xway_gphy_handle_interrupt,
++		.config_intr	= xway_gphy_config_intr,
++		.suspend	= genphy_suspend,
++		.resume		= genphy_resume,
++		.led_brightness_set = xway_gphy_led_brightness_set,
++		.led_hw_is_supported = xway_gphy_led_hw_is_supported,
++		.led_hw_control_get = xway_gphy_led_hw_control_get,
++		.led_hw_control_set = xway_gphy_led_hw_control_set,
++		.led_polarity_set = xway_gphy_led_polarity_set,
++	}, {
++		.phy_id		= PHY_ID_PHY22F_VR9_1_1,
++		.phy_id_mask	= 0xffffffff,
++		.name		= "Intel XWAY PHY22F (xRX v1.1 integrated)",
++		/* PHY_BASIC_FEATURES */
++		.config_init	= xway_gphy_config_init,
++		.handle_interrupt = xway_gphy_handle_interrupt,
++		.config_intr	= xway_gphy_config_intr,
++		.suspend	= genphy_suspend,
++		.resume		= genphy_resume,
++		.led_brightness_set = xway_gphy_led_brightness_set,
++		.led_hw_is_supported = xway_gphy_led_hw_is_supported,
++		.led_hw_control_get = xway_gphy_led_hw_control_get,
++		.led_hw_control_set = xway_gphy_led_hw_control_set,
++		.led_polarity_set = xway_gphy_led_polarity_set,
++	}, {
++		.phy_id		= PHY_ID_PHY11G_VR9_1_2,
++		.phy_id_mask	= 0xffffffff,
++		.name		= "Intel XWAY PHY11G (xRX v1.2 integrated)",
++		/* PHY_GBIT_FEATURES */
++		.config_init	= xway_gphy_config_init,
++		.handle_interrupt = xway_gphy_handle_interrupt,
++		.config_intr	= xway_gphy_config_intr,
++		.suspend	= genphy_suspend,
++		.resume		= genphy_resume,
++		.led_brightness_set = xway_gphy_led_brightness_set,
++		.led_hw_is_supported = xway_gphy_led_hw_is_supported,
++		.led_hw_control_get = xway_gphy_led_hw_control_get,
++		.led_hw_control_set = xway_gphy_led_hw_control_set,
++		.led_polarity_set = xway_gphy_led_polarity_set,
++	}, {
++		.phy_id		= PHY_ID_PHY22F_VR9_1_2,
++		.phy_id_mask	= 0xffffffff,
++		.name		= "Intel XWAY PHY22F (xRX v1.2 integrated)",
++		/* PHY_BASIC_FEATURES */
++		.config_init	= xway_gphy_config_init,
++		.handle_interrupt = xway_gphy_handle_interrupt,
++		.config_intr	= xway_gphy_config_intr,
++		.suspend	= genphy_suspend,
++		.resume		= genphy_resume,
++		.led_brightness_set = xway_gphy_led_brightness_set,
++		.led_hw_is_supported = xway_gphy_led_hw_is_supported,
++		.led_hw_control_get = xway_gphy_led_hw_control_get,
++		.led_hw_control_set = xway_gphy_led_hw_control_set,
++		.led_polarity_set = xway_gphy_led_polarity_set,
++	},
++};
++module_phy_driver(xway_gphy);
++
++static const struct mdio_device_id __maybe_unused xway_gphy_tbl[] = {
++	{ PHY_ID_PHY11G_1_3, 0xffffffff },
++	{ PHY_ID_PHY22F_1_3, 0xffffffff },
++	{ PHY_ID_PHY11G_1_4, 0xffffffff },
++	{ PHY_ID_PHY22F_1_4, 0xffffffff },
++	{ PHY_ID_PHY11G_1_5, 0xffffffff },
++	{ PHY_ID_PHY22F_1_5, 0xffffffff },
++	{ PHY_ID_PHY11G_VR9_1_1, 0xffffffff },
++	{ PHY_ID_PHY22F_VR9_1_1, 0xffffffff },
++	{ PHY_ID_PHY11G_VR9_1_2, 0xffffffff },
++	{ PHY_ID_PHY22F_VR9_1_2, 0xffffffff },
++	{ }
++};
++MODULE_DEVICE_TABLE(mdio, xway_gphy_tbl);
++
++MODULE_DESCRIPTION("Intel XWAY PHY driver");
++MODULE_LICENSE("GPL");
+diff -rupN old/linux-6.14/drivers/net/wireless/realtek/Kconfig linux-6.14/drivers/net/wireless/realtek/Kconfig
+--- old/linux-6.14/drivers/net/wireless/realtek/Kconfig	2025-03-24 10:02:41.000000000 -0400
++++ linux-6.14/drivers/net/wireless/realtek/Kconfig	2025-03-29 07:43:35.027899542 -0400
+@@ -13,9 +13,9 @@ config WLAN_VENDOR_REALTEK
+ if WLAN_VENDOR_REALTEK
+ 
+ source "drivers/net/wireless/realtek/rtl818x/Kconfig"
+-source "drivers/net/wireless/realtek/rtlwifi/Kconfig"
+ source "drivers/net/wireless/realtek/rtl8xxxu/Kconfig"
+ source "drivers/net/wireless/realtek/rtw88/Kconfig"
+ source "drivers/net/wireless/realtek/rtw89/Kconfig"
++source "drivers/net/wireless/realtek/rtl8188eu/Kconfig"
+ 
+ endif # WLAN_VENDOR_REALTEK
+diff -rupN old/linux-6.14/drivers/net/wireless/realtek/Makefile linux-6.14/drivers/net/wireless/realtek/Makefile
+--- old/linux-6.14/drivers/net/wireless/realtek/Makefile	2025-03-24 10:02:41.000000000 -0400
++++ linux-6.14/drivers/net/wireless/realtek/Makefile	2025-03-29 07:43:35.028067179 -0400
+@@ -5,8 +5,8 @@
+ 
+ obj-$(CONFIG_RTL8180)		+= rtl818x/
+ obj-$(CONFIG_RTL8187)		+= rtl818x/
+-obj-$(CONFIG_RTLWIFI)		+= rtlwifi/
+ obj-$(CONFIG_RTL8XXXU)		+= rtl8xxxu/
+ obj-$(CONFIG_RTW88)		+= rtw88/
+ obj-$(CONFIG_RTW89)		+= rtw89/
++obj-$(CONFIG_RTL8188EU)		+= rtl8188eu/
+ 
+diff -rupN old/linux-6.14/drivers/pps/clients/pps-gpio.c linux-6.14/drivers/pps/clients/pps-gpio.c
+--- old/linux-6.14/drivers/pps/clients/pps-gpio.c	2025-03-24 10:02:41.000000000 -0400
++++ linux-6.14/drivers/pps/clients/pps-gpio.c	2025-03-29 07:43:35.028233002 -0400
+@@ -117,6 +117,9 @@ static int pps_gpio_setup(struct device
+ 	data->assert_falling_edge =
+ 		device_property_read_bool(dev, "assert-falling-edge");
+ 
++	data->capture_clear =
++		device_property_read_bool(dev, "capture-clear");
++
+ 	data->echo_pin = devm_gpiod_get_optional(dev, "echo", GPIOD_OUT_LOW);
+ 	if (IS_ERR(data->echo_pin))
+ 		return dev_err_probe(dev, PTR_ERR(data->echo_pin),
+diff -rupN old/linux-6.14/drivers/pps/clients/pps-gpio.c.orig linux-6.14/drivers/pps/clients/pps-gpio.c.orig
+--- old/linux-6.14/drivers/pps/clients/pps-gpio.c.orig	1969-12-31 19:00:00.000000000 -0500
++++ linux-6.14/drivers/pps/clients/pps-gpio.c.orig	2025-03-24 10:02:41.000000000 -0400
+@@ -0,0 +1,258 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/*
++ * pps-gpio.c -- PPS client driver using GPIO
++ *
++ * Copyright (C) 2010 Ricardo Martins <rasm@fe.up.pt>
++ * Copyright (C) 2011 James Nuss <jamesnuss@nanometrics.ca>
++ */
++
++#define PPS_GPIO_NAME "pps-gpio"
++#define pr_fmt(fmt) PPS_GPIO_NAME ": " fmt
++
++#include <linux/init.h>
++#include <linux/kernel.h>
++#include <linux/interrupt.h>
++#include <linux/mod_devicetable.h>
++#include <linux/module.h>
++#include <linux/platform_device.h>
++#include <linux/slab.h>
++#include <linux/pps_kernel.h>
++#include <linux/gpio/consumer.h>
++#include <linux/list.h>
++#include <linux/property.h>
++#include <linux/timer.h>
++#include <linux/jiffies.h>
++
++/* Info for each registered platform device */
++struct pps_gpio_device_data {
++	int irq;			/* IRQ used as PPS source */
++	struct pps_device *pps;		/* PPS source device */
++	struct pps_source_info info;	/* PPS source information */
++	struct gpio_desc *gpio_pin;	/* GPIO port descriptors */
++	struct gpio_desc *echo_pin;
++	struct timer_list echo_timer;	/* timer to reset echo active state */
++	bool assert_falling_edge;
++	bool capture_clear;
++	unsigned int echo_active_ms;	/* PPS echo active duration */
++	unsigned long echo_timeout;	/* timer timeout value in jiffies */
++};
++
++/*
++ * Report the PPS event
++ */
++
++static irqreturn_t pps_gpio_irq_handler(int irq, void *data)
++{
++	const struct pps_gpio_device_data *info;
++	struct pps_event_time ts;
++	int rising_edge;
++
++	/* Get the time stamp first */
++	pps_get_ts(&ts);
++
++	info = data;
++
++	/* Small trick to bypass the check on edge's direction when capture_clear is unset */
++	rising_edge = info->capture_clear ?
++		      gpiod_get_value(info->gpio_pin) : !info->assert_falling_edge;
++	if ((rising_edge && !info->assert_falling_edge) ||
++			(!rising_edge && info->assert_falling_edge))
++		pps_event(info->pps, &ts, PPS_CAPTUREASSERT, data);
++	else if (info->capture_clear &&
++			((rising_edge && info->assert_falling_edge) ||
++			(!rising_edge && !info->assert_falling_edge)))
++		pps_event(info->pps, &ts, PPS_CAPTURECLEAR, data);
++	else
++		dev_warn_ratelimited(&info->pps->dev, "IRQ did not trigger any PPS event\n");
++
++	return IRQ_HANDLED;
++}
++
++/* This function will only be called when an ECHO GPIO is defined */
++static void pps_gpio_echo(struct pps_device *pps, int event, void *data)
++{
++	/* add_timer() needs to write into info->echo_timer */
++	struct pps_gpio_device_data *info = data;
++
++	switch (event) {
++	case PPS_CAPTUREASSERT:
++		if (pps->params.mode & PPS_ECHOASSERT)
++			gpiod_set_value(info->echo_pin, 1);
++		break;
++
++	case PPS_CAPTURECLEAR:
++		if (pps->params.mode & PPS_ECHOCLEAR)
++			gpiod_set_value(info->echo_pin, 1);
++		break;
++	}
++
++	/* fire the timer */
++	if (info->pps->params.mode & (PPS_ECHOASSERT | PPS_ECHOCLEAR)) {
++		info->echo_timer.expires = jiffies + info->echo_timeout;
++		add_timer(&info->echo_timer);
++	}
++}
++
++/* Timer callback to reset the echo pin to the inactive state */
++static void pps_gpio_echo_timer_callback(struct timer_list *t)
++{
++	const struct pps_gpio_device_data *info;
++
++	info = from_timer(info, t, echo_timer);
++
++	gpiod_set_value(info->echo_pin, 0);
++}
++
++static int pps_gpio_setup(struct device *dev)
++{
++	struct pps_gpio_device_data *data = dev_get_drvdata(dev);
++	int ret;
++	u32 value;
++
++	data->gpio_pin = devm_gpiod_get(dev, NULL, GPIOD_IN);
++	if (IS_ERR(data->gpio_pin))
++		return dev_err_probe(dev, PTR_ERR(data->gpio_pin),
++				     "failed to request PPS GPIO\n");
++
++	data->assert_falling_edge =
++		device_property_read_bool(dev, "assert-falling-edge");
++
++	data->echo_pin = devm_gpiod_get_optional(dev, "echo", GPIOD_OUT_LOW);
++	if (IS_ERR(data->echo_pin))
++		return dev_err_probe(dev, PTR_ERR(data->echo_pin),
++				     "failed to request ECHO GPIO\n");
++
++	if (!data->echo_pin)
++		return 0;
++
++	ret = device_property_read_u32(dev, "echo-active-ms", &value);
++	if (ret) {
++		dev_err(dev, "failed to get echo-active-ms from FW\n");
++		return ret;
++	}
++
++	/* sanity check on echo_active_ms */
++	if (!value || value > 999) {
++		dev_err(dev, "echo-active-ms: %u - bad value from FW\n", value);
++		return -EINVAL;
++	}
++
++	data->echo_active_ms = value;
++
++	return 0;
++}
++
++static unsigned long
++get_irqf_trigger_flags(const struct pps_gpio_device_data *data)
++{
++	unsigned long flags = data->assert_falling_edge ?
++		IRQF_TRIGGER_FALLING : IRQF_TRIGGER_RISING;
++
++	if (data->capture_clear) {
++		flags |= ((flags & IRQF_TRIGGER_RISING) ?
++				IRQF_TRIGGER_FALLING : IRQF_TRIGGER_RISING);
++	}
++
++	return flags;
++}
++
++static int pps_gpio_probe(struct platform_device *pdev)
++{
++	struct pps_gpio_device_data *data;
++	struct device *dev = &pdev->dev;
++	int ret;
++	int pps_default_params;
++
++	/* allocate space for device info */
++	data = devm_kzalloc(dev, sizeof(*data), GFP_KERNEL);
++	if (!data)
++		return -ENOMEM;
++
++	dev_set_drvdata(dev, data);
++
++	/* GPIO setup */
++	ret = pps_gpio_setup(dev);
++	if (ret)
++		return ret;
++
++	/* IRQ setup */
++	ret = gpiod_to_irq(data->gpio_pin);
++	if (ret < 0) {
++		dev_err(dev, "failed to map GPIO to IRQ: %d\n", ret);
++		return -EINVAL;
++	}
++	data->irq = ret;
++
++	/* initialize PPS specific parts of the bookkeeping data structure. */
++	data->info.mode = PPS_CAPTUREASSERT | PPS_OFFSETASSERT |
++		PPS_ECHOASSERT | PPS_CANWAIT | PPS_TSFMT_TSPEC;
++	if (data->capture_clear)
++		data->info.mode |= PPS_CAPTURECLEAR | PPS_OFFSETCLEAR |
++			PPS_ECHOCLEAR;
++	data->info.owner = THIS_MODULE;
++	snprintf(data->info.name, PPS_MAX_NAME_LEN - 1, "%s.%d",
++		 pdev->name, pdev->id);
++	if (data->echo_pin) {
++		data->info.echo = pps_gpio_echo;
++		data->echo_timeout = msecs_to_jiffies(data->echo_active_ms);
++		timer_setup(&data->echo_timer, pps_gpio_echo_timer_callback, 0);
++	}
++
++	/* register PPS source */
++	pps_default_params = PPS_CAPTUREASSERT | PPS_OFFSETASSERT;
++	if (data->capture_clear)
++		pps_default_params |= PPS_CAPTURECLEAR | PPS_OFFSETCLEAR;
++	data->pps = pps_register_source(&data->info, pps_default_params);
++	if (IS_ERR(data->pps)) {
++		dev_err(dev, "failed to register IRQ %d as PPS source\n",
++			data->irq);
++		return PTR_ERR(data->pps);
++	}
++
++	/* register IRQ interrupt handler */
++	ret = devm_request_irq(dev, data->irq, pps_gpio_irq_handler,
++			get_irqf_trigger_flags(data), data->info.name, data);
++	if (ret) {
++		pps_unregister_source(data->pps);
++		dev_err(dev, "failed to acquire IRQ %d\n", data->irq);
++		return -EINVAL;
++	}
++
++	dev_dbg(&data->pps->dev, "Registered IRQ %d as PPS source\n",
++		data->irq);
++
++	return 0;
++}
++
++static void pps_gpio_remove(struct platform_device *pdev)
++{
++	struct pps_gpio_device_data *data = platform_get_drvdata(pdev);
++
++	pps_unregister_source(data->pps);
++	del_timer_sync(&data->echo_timer);
++	/* reset echo pin in any case */
++	gpiod_set_value(data->echo_pin, 0);
++	dev_info(&pdev->dev, "removed IRQ %d as PPS source\n", data->irq);
++}
++
++static const struct of_device_id pps_gpio_dt_ids[] = {
++	{ .compatible = "pps-gpio", },
++	{ /* sentinel */ }
++};
++MODULE_DEVICE_TABLE(of, pps_gpio_dt_ids);
++
++static struct platform_driver pps_gpio_driver = {
++	.probe		= pps_gpio_probe,
++	.remove		= pps_gpio_remove,
++	.driver		= {
++		.name	= PPS_GPIO_NAME,
++		.of_match_table	= pps_gpio_dt_ids,
++	},
++};
++
++module_platform_driver(pps_gpio_driver);
++MODULE_AUTHOR("Ricardo Martins <rasm@fe.up.pt>");
++MODULE_AUTHOR("James Nuss <jamesnuss@nanometrics.ca>");
++MODULE_DESCRIPTION("Use GPIO pin as PPS source");
++MODULE_LICENSE("GPL");
++MODULE_VERSION("1.2.0");
+diff -rupN old/linux-6.14/drivers/usb/chipidea/ci_hdrc_usb2.c linux-6.14/drivers/usb/chipidea/ci_hdrc_usb2.c
+--- old/linux-6.14/drivers/usb/chipidea/ci_hdrc_usb2.c	2025-03-24 10:02:41.000000000 -0400
++++ linux-6.14/drivers/usb/chipidea/ci_hdrc_usb2.c	2025-03-29 07:43:35.028393003 -0400
+@@ -62,9 +62,18 @@ static int ci_hdrc_usb2_probe(struct pla
+ 	}
+ 
+ 	data = device_get_match_data(&pdev->dev);
+-	if (data)
++	if (data) {
+ 		/* struct copy */
+ 		*ci_pdata = *data;
++		if (of_device_is_compatible(pdev->dev.of_node,
++					    "xlnx,zynq-usb-2.20a")) {
++			ci_pdata->usb_phy = devm_usb_get_phy_by_phandle(dev,
++									"usb-phy",
++									0);
++			if (IS_ERR(ci_pdata->usb_phy))
++				return PTR_ERR(ci_pdata->usb_phy);
++		}
++ 	}
+ 
+ 	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
+ 	if (!priv)
+diff -rupN old/linux-6.14/drivers/usb/phy/Kconfig linux-6.14/drivers/usb/phy/Kconfig
+--- old/linux-6.14/drivers/usb/phy/Kconfig	2025-03-24 10:02:41.000000000 -0400
++++ linux-6.14/drivers/usb/phy/Kconfig	2025-03-29 07:43:35.028547482 -0400
+@@ -160,7 +160,7 @@ config USB_TEGRA_PHY
+ 
+ config USB_ULPI
+ 	bool "Generic ULPI Transceiver Driver"
+-	depends on ARM || ARM64 || COMPILE_TEST
++	depends on ARM || ARM64 || COMPILE_TEST || USB_PHY
+ 	select USB_ULPI_VIEWPORT
+ 	help
+ 	  Enable this to support ULPI connected USB OTG transceivers which
+diff -rupN old/linux-6.14/drivers/usb/phy/phy-ulpi.c linux-6.14/drivers/usb/phy/phy-ulpi.c
+--- old/linux-6.14/drivers/usb/phy/phy-ulpi.c	2025-03-24 10:02:41.000000000 -0400
++++ linux-6.14/drivers/usb/phy/phy-ulpi.c	2025-03-29 07:43:35.028723246 -0400
+@@ -13,9 +13,16 @@
+ #include <linux/kernel.h>
+ #include <linux/slab.h>
+ #include <linux/export.h>
++#include <linux/module.h>
++#include <linux/io.h>
++#include <linux/of.h>
++#include <linux/of_address.h>
++#include <linux/of_device.h>
++#include <linux/platform_device.h>
+ #include <linux/usb.h>
+ #include <linux/usb/otg.h>
+ #include <linux/usb/ulpi.h>
++#include <linux/usb/phy.h>
+ 
+ 
+ struct ulpi_info {
+@@ -39,6 +46,13 @@ static struct ulpi_info ulpi_ids[] = {
+ 	ULPI_INFO(ULPI_ID(0x0451, 0x1507), "TI TUSB1210"),
+ };
+ 
++struct ulpi_phy {
++	struct usb_phy	*usb_phy;
++	void __iomem *regs;
++	unsigned int vp_offset;
++	unsigned int flags;
++};
++
+ static int ulpi_set_otg_flags(struct usb_phy *phy)
+ {
+ 	unsigned int flags = ULPI_OTG_CTRL_DP_PULLDOWN |
+@@ -240,6 +254,23 @@ static int ulpi_set_vbus(struct usb_otg
+ 	return usb_phy_io_write(phy, flags, ULPI_OTG_CTRL);
+ }
+ 
++static int usbphy_set_vbus(struct usb_phy *phy, int on)
++{
++	unsigned int flags = usb_phy_io_read(phy, ULPI_OTG_CTRL);
++
++	flags &= ~(ULPI_OTG_CTRL_DRVVBUS | ULPI_OTG_CTRL_DRVVBUS_EXT);
++
++	if (on) {
++		if (phy->flags & ULPI_OTG_DRVVBUS)
++			flags |= ULPI_OTG_CTRL_DRVVBUS;
++
++		if (phy->flags & ULPI_OTG_DRVVBUS_EXT)
++			flags |= ULPI_OTG_CTRL_DRVVBUS_EXT;
++	}
++
++	return usb_phy_io_write(phy, flags, ULPI_OTG_CTRL);
++}
++
+ static void otg_ulpi_init(struct usb_phy *phy, struct usb_otg *otg,
+ 			  struct usb_phy_io_ops *ops,
+ 			  unsigned int flags)
+@@ -249,6 +280,7 @@ static void otg_ulpi_init(struct usb_phy
+ 	phy->io_ops	= ops;
+ 	phy->otg	= otg;
+ 	phy->init	= ulpi_init;
++	phy->set_vbus	= usbphy_set_vbus;
+ 
+ 	otg->usb_phy	= phy;
+ 	otg->set_host	= ulpi_set_host;
+@@ -301,3 +333,69 @@ devm_otg_ulpi_create(struct device *dev,
+ 	return phy;
+ }
+ EXPORT_SYMBOL_GPL(devm_otg_ulpi_create);
++
++static int ulpi_phy_probe(struct platform_device *pdev)
++{
++	struct device_node *np = pdev->dev.of_node;
++	struct resource *res;
++	struct ulpi_phy *uphy;
++	int ret;
++
++	uphy = devm_kzalloc(&pdev->dev, sizeof(*uphy), GFP_KERNEL);
++	if (!uphy)
++		return -ENOMEM;
++
++	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++	if (!res) {
++		dev_err(&pdev->dev, "no phy I/O memory resource defined\n");
++		return -ENODEV;
++	}
++
++	uphy->regs = devm_ioremap(&pdev->dev, res->start, resource_size(res));
++	if (IS_ERR(uphy->regs))
++		return PTR_ERR(uphy->regs);
++
++	if (of_property_read_bool(np, "external-drv-vbus") ||
++	    of_property_read_bool(np, "drv-vbus"))
++		uphy->flags |= ULPI_OTG_DRVVBUS | ULPI_OTG_DRVVBUS_EXT;
++
++	ret = of_property_read_u32(np, "view-port", &uphy->vp_offset);
++	if (ret)
++		return ret;
++
++	uphy->usb_phy = otg_ulpi_create(&ulpi_viewport_access_ops, uphy->flags);
++	if (!uphy->usb_phy) {
++		dev_err(&pdev->dev, "Failed to create ULPI OTG\n");
++		return -ENOMEM;
++	}
++
++	uphy->usb_phy->dev = &pdev->dev;
++	uphy->usb_phy->io_priv = uphy->regs + uphy->vp_offset;
++	return usb_add_phy_dev(uphy->usb_phy);
++}
++
++static void ulpi_phy_remove(struct platform_device *pdev)
++{
++	struct ulpi_phy *uphy = platform_get_drvdata(pdev);
++
++	usb_remove_phy(uphy->usb_phy);
++}
++
++static const struct of_device_id ulpi_phy_table[] = {
++	{ .compatible = "ulpi-phy" },
++	{ },
++};
++MODULE_DEVICE_TABLE(of, ulpi_phy_table);
++
++static struct platform_driver ulpi_phy_driver = {
++	.probe		= ulpi_phy_probe,
++	.remove		= ulpi_phy_remove,
++	.driver		= {
++		.name	= "ulpi-phy",
++		.of_match_table = ulpi_phy_table,
++	},
++};
++module_platform_driver(ulpi_phy_driver);
++
++MODULE_DESCRIPTION("ULPI PHY driver");
++MODULE_LICENSE("GPL");

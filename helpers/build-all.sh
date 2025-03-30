@@ -8,10 +8,14 @@ make NAME=led_blinker all
 
 PRJS="sdr_receiver sdr_receiver_hpsdr sdr_receiver_wide sdr_transceiver sdr_transceiver_ft8 sdr_transceiver_hpsdr sdr_transceiver_wide sdr_transceiver_wspr mcpha pulsed_nmr scanner vna playground template"
 
-printf "%s\n" $PRJS | xargs -n 1 -P $JOBS -I {} make NAME={} bit
+#printf "%s\n" $PRJS | xargs -n 1 -P $JOBS -I {} make NAME={} bit
 
 PRJS="led_blinker_122_88 sdr_receiver_122_88 sdr_receiver_hpsdr_122_88 sdr_receiver_wide_122_88 sdr_transceiver_122_88 sdr_transceiver_ft8_122_88 sdr_transceiver_hpsdr_122_88 sdr_transceiver_wspr_122_88 pulsed_nmr_122_88 vna_122_88"
 
-printf "%s\n" $PRJS | xargs -n 1 -P $JOBS -I {} make NAME={} PART=xc7z020clg400-1 bit
+#printf "%s\n" $PRJS | xargs -n 1 -P $JOBS -I {} make NAME={} PART=xc7z020clg400-1 bit
+
+PRJS="sdr_receiver_trx_duo sdr_receiver_hpsdr_trx_duo sdr_receiver_wide_trx_duo sdr_transceiver_trx_duo sdr_transceiver_ft8_trx_duo sdr_transceiver_hpsdr_trx_duo sdr_transceiver_wide_trx_duo sdr_transceiver_wspr_trx_duo mcpha_trx_duo pulsed_nmr_trx_duo scanner_trx_duo vna_trx_duo playground template"
+
+printf "%s\n" $PRJS | xargs -n 1 -P $JOBS -I {} make NAME={} bit
 
 sudo sh scripts/alpine.sh
