@@ -1,0 +1,110 @@
+diff -rupN old/rtl8188eu/os_dep/linux/ioctl_cfg80211.c rtl8188eu/os_dep/linux/ioctl_cfg80211.c
+--- old/rtl8188eu/os_dep/linux/ioctl_cfg80211.c	2024-05-29 09:26:16.000000000 -0400
++++ rtl8188eu/os_dep/linux/ioctl_cfg80211.c	2025-03-29 08:31:51.842259563 -0400
+@@ -460,8 +460,10 @@ u8 rtw_cfg80211_ch_switch_notify(_adapte
+ 		cfg80211_ch_switch_started_notify(adapter->pnetdev, &chdef, 0, false);
+ #elif (LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0))
+ 		cfg80211_ch_switch_started_notify(adapter->pnetdev, &chdef, 0, 0, false);
+-#else
++#elif (LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0))
+ 		cfg80211_ch_switch_started_notify(adapter->pnetdev, &chdef, 0, 0, false, 0);
++#else
++		cfg80211_ch_switch_started_notify(adapter->pnetdev, &chdef, 0, 0, false);
+ #endif
+ 		goto exit;
+ 	}
+@@ -474,8 +476,10 @@ u8 rtw_cfg80211_ch_switch_notify(_adapte
+ 	cfg80211_ch_switch_notify(adapter->pnetdev, &chdef);
+ #elif (LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0))
+ 	cfg80211_ch_switch_notify(adapter->pnetdev, &chdef, 0);
+-#else
++#elif (LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0))
+ 	cfg80211_ch_switch_notify(adapter->pnetdev, &chdef, 0, 0);
++#else
++	cfg80211_ch_switch_notify(adapter->pnetdev, &chdef, 0);
+ #endif
+ 
+ #else
+@@ -4627,6 +4631,9 @@ static int cfg80211_rtw_get_txpower(stru
+ #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0))
+ 	struct wireless_dev *wdev,
+ #endif
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 14, 0))
++	unsigned int link_id,
++#endif
+ 	int *dbm)
+ {
+ 	struct dvobj_priv *dvobj = wiphy_to_dvobj(wiphy);
+@@ -5383,13 +5390,14 @@ exit:
+ }
+ 
+ static int cfg80211_rtw_change_beacon(struct wiphy *wiphy, struct net_device *ndev,
+-		struct cfg80211_beacon_data *info)
++		struct cfg80211_ap_update *params)
+ {
+ 	int ret = 0;
+ 	_adapter *adapter = (_adapter *)rtw_netdev_priv(ndev);
+ 
+ 	RTW_INFO(FUNC_NDEV_FMT"\n", FUNC_NDEV_ARG(ndev));
+ 
++	struct cfg80211_beacon_data *info = &params->beacon;
+ 	ret = rtw_add_beacon(adapter, info->head, info->head_len, info->tail, info->tail_len);
+ 
+ 	return ret;
+@@ -6867,6 +6875,9 @@ static void rtw_get_chbwoff_from_cfg8021
+ #endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0)) */
+ 
+ static int cfg80211_rtw_set_monitor_channel(struct wiphy *wiphy
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0))
++	, struct net_device *dev
++#endif
+ #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0))
+ 	, struct cfg80211_chan_def *chandef
+ #else
+diff -rupN old/rtl8188eu/os_dep/linux/os_intfs.c rtl8188eu/os_dep/linux/os_intfs.c
+--- old/rtl8188eu/os_dep/linux/os_intfs.c	2024-05-29 09:26:16.000000000 -0400
++++ rtl8188eu/os_dep/linux/os_intfs.c	2025-03-29 08:07:26.533560283 -0400
+@@ -2034,13 +2034,13 @@ static void rtw_ethtool_get_drvinfo(stru
+ 
+ 	wdev = dev->ieee80211_ptr;
+ 	if (wdev) {
+-		strlcpy(info->driver, wiphy_dev(wdev->wiphy)->driver->name,
++		strscpy(info->driver, wiphy_dev(wdev->wiphy)->driver->name,
+ 			sizeof(info->driver));
+ 	} else {
+-		strlcpy(info->driver, "N/A", sizeof(info->driver));
++		strscpy(info->driver, "N/A", sizeof(info->driver));
+ 	}
+ 
+-	strlcpy(info->version, DRIVERVERSION, sizeof(info->version));
++	strscpy(info->version, DRIVERVERSION, sizeof(info->version));
+ 
+ 	padapter = (_adapter *)rtw_netdev_priv(dev);
+ 	if (padapter) {
+@@ -2051,10 +2051,10 @@ static void rtw_ethtool_get_drvinfo(stru
+ 		scnprintf(info->fw_version, sizeof(info->fw_version), "%d.%d",
+ 			  hal_data->firmware_version, hal_data->firmware_sub_version);
+ 	} else {
+-		strlcpy(info->fw_version, "N/A", sizeof(info->fw_version));
++		strscpy(info->fw_version, "N/A", sizeof(info->fw_version));
+ 	}
+ 
+-	strlcpy(info->bus_info, dev_name(wiphy_dev(wdev->wiphy)),
++	strscpy(info->bus_info, dev_name(wiphy_dev(wdev->wiphy)),
+ 		sizeof(info->bus_info));
+ }
+ 
+diff -rupN old/rtl8188eu/os_dep/linux/usb_intf.c rtl8188eu/os_dep/linux/usb_intf.c
+--- old/rtl8188eu/os_dep/linux/usb_intf.c	2024-05-29 09:26:16.000000000 -0400
++++ rtl8188eu/os_dep/linux/usb_intf.c	2025-03-29 08:07:26.534393730 -0400
+@@ -345,7 +345,9 @@ struct rtw_usb_drv usb_drv = {
+ 	.usbdrv.reset_resume   = rtw_resume,
+ #endif
+ 
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 19))
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 19))
++	.usbdrv.driver.shutdown = rtw_dev_shutdown,
++#elif (LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0)) 
+ 	.usbdrv.drvwrap.driver.shutdown = rtw_dev_shutdown,
+ #else
+ 	.usbdrv.driver.shutdown = rtw_dev_shutdown,

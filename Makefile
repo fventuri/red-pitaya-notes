@@ -19,8 +19,8 @@ VIVADO = vivado -nolog -nojournal -mode batch
 XSCT = xsct
 RM = rm -rf
 
-INITRAMFS_TAG = 3.20
-LINUX_TAG = 6.6
+INITRAMFS_TAG = 3.21
+LINUX_TAG = 6.14
 DTREE_TAG = xilinx_v2024.2
 
 INITRAMFS_DIR = tmp/initramfs-$(INITRAMFS_TAG)
@@ -31,7 +31,7 @@ LINUX_TAR = tmp/linux-$(LINUX_TAG).tar.xz
 DTREE_TAR = tmp/device-tree-xlnx-$(DTREE_TAG).tar.gz
 
 INITRAMFS_URL = https://dl-cdn.alpinelinux.org/alpine/v$(INITRAMFS_TAG)/releases/armv7/netboot/initramfs-lts
-LINUX_URL = https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$(LINUX_TAG).32.tar.xz
+LINUX_URL = https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$(LINUX_TAG).tar.xz
 DTREE_URL = https://github.com/Xilinx/device-tree-xlnx/archive/$(DTREE_TAG).tar.gz
 
 SSBL_URL = https://github.com/pavel-demin/ssbl/releases/latest/download/ssbl.elf
@@ -76,6 +76,7 @@ $(LINUX_DIR): $(LINUX_TAR) $(RTL8188_TAR)
 	cp patches/cma.c $@/drivers/char
 	cp patches/xilinx_devcfg.c $@/drivers/char
 	cp patches/xilinx_zynq_defconfig $@/arch/arm/configs
+	patch -d $@/drivers/net/wireless/realtek/rtl8188eu -p 1 < patches/rtl8188eu.patch
 
 $(DTREE_DIR): $(DTREE_TAR)
 	mkdir -p $@

@@ -119,7 +119,7 @@ static const char * const fclk_name[] = {
  * @irq: Interrupt number
  * @clk: Peripheral clock for devcfg
  * @fclk: Array holding references to the FPGA clocks
- * @fclk_exported: Flag inidcating whether an FPGA clock is exported
+ * @fclk_exported: Flag indicating whether an FPGA clock is exported
  * @is_open: The status bit to indicate whether the device is opened
  * @sem: Instance for the mutex
  * @lock: Instance of spinlock
@@ -2110,18 +2110,16 @@ failed5:
  *
  * @pdev:	handle to the platform device structure.
  *
- * Returns: 0 or error status.
- *
  * Unregister the device after releasing the resources.
  */
-static int xdevcfg_drv_remove(struct platform_device *pdev)
+static void xdevcfg_drv_remove(struct platform_device *pdev)
 {
 	struct xdevcfg_drvdata *drvdata;
 
 	drvdata = platform_get_drvdata(pdev);
 
 	if (!drvdata)
-		return -ENODEV;
+		return;
 
 	unregister_chrdev_region(drvdata->devt, XDEVCFG_DEVICES);
 
@@ -2132,8 +2130,6 @@ static int xdevcfg_drv_remove(struct platform_device *pdev)
 	class_destroy(drvdata->class);
 	cdev_del(&drvdata->cdev);
 	clk_unprepare(drvdata->clk);
-
-	return 0;		/* Success */
 }
 
 static const struct of_device_id xdevcfg_of_match[] = {

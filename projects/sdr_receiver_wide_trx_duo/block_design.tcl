@@ -1,0 +1,340 @@
+# Create clk_wiz
+cell xilinx.com:ip:clk_wiz pll_0 {
+  PRIMITIVE PLL
+  PRIM_IN_FREQ.VALUE_SRC USER
+  PRIM_IN_FREQ 125.0
+  PRIM_SOURCE Differential_clock_capable_pin
+  CLKOUT1_USED true
+  CLKOUT1_REQUESTED_OUT_FREQ 125.0
+  CLKOUT2_USED true
+  CLKOUT2_REQUESTED_OUT_FREQ 250.0
+  CLKOUT2_REQUESTED_PHASE 157.5
+  CLKOUT3_USED true
+  CLKOUT3_REQUESTED_OUT_FREQ 250.0
+  CLKOUT3_REQUESTED_PHASE 202.5
+  USE_RESET false
+} {
+  clk_in1_p adc_clk_p_i
+  clk_in1_n adc_clk_n_i
+}
+
+# Create processing_system7
+cell xilinx.com:ip:processing_system7 ps_0 {
+  PCW_IMPORT_BOARD_PRESET cfg/red_pitaya.xml
+  PCW_USE_S_AXI_ACP 1
+  PCW_USE_DEFAULT_ACP_USER_VAL 1
+} {
+  M_AXI_GP0_ACLK pll_0/clk_out1
+  S_AXI_ACP_ACLK pll_0/clk_out1
+}
+
+# Create all required interconnections
+apply_bd_automation -rule xilinx.com:bd_rule:processing_system7 -config {
+  make_external {FIXED_IO, DDR}
+  Master Disable
+  Slave Disable
+} [get_bd_cells ps_0]
+
+# Create xlconstant
+cell xilinx.com:ip:xlconstant const_0
+
+# Create proc_sys_reset
+cell xilinx.com:ip:proc_sys_reset rst_0 {} {
+  ext_reset_in const_0/dout
+  dcm_locked pll_0/locked
+  slowest_sync_clk pll_0/clk_out1
+}
+
+# ADC
+
+# Create axis_red_pitaya_adc
+cell pavel-demin:user:axis_red_pitaya_adc adc_0 {
+  ADC_DATA_WIDTH 16
+} {
+  aclk pll_0/clk_out1
+  adc_dat_a adc_dat_a_i
+  adc_dat_b adc_dat_b_i
+  adc_csn adc_csn_o
+}
+
+# DAC
+
+# Create axis_red_pitaya_dac
+cell pavel-demin:user:axis_red_pitaya_dac dac_0 {
+  DAC_DATA_WIDTH 14
+} {
+  aclk pll_0/clk_out1
+  ddr_clk pll_0/clk_out2
+  wrt_clk pll_0/clk_out3
+  locked pll_0/locked
+  dac_clk dac_clk_o
+  dac_rst dac_rst_o
+  dac_sel dac_sel_o
+  dac_wrt dac_wrt_o
+  dac_dat dac_dat_o
+  s_axis_tvalid const_0/dout
+}
+
+# HUB
+
+# Create axi_hub
+cell pavel-demin:user:axi_hub hub_0 {
+  CFG_DATA_WIDTH 224
+  STS_DATA_WIDTH 32
+} {
+  S_AXI ps_0/M_AXI_GP0
+  aclk pll_0/clk_out1
+  aresetn rst_0/peripheral_aresetn
+}
+
+# Create port_slicer
+cell pavel-demin:user:port_slicer slice_0 {
+  DIN_WIDTH 224 DIN_FROM 0 DIN_TO 0
+} {
+  din hub_0/cfg_data
+}
+
+# Create port_slicer
+cell pavel-demin:user:port_slicer slice_1 {
+  DIN_WIDTH 224 DIN_FROM 1 DIN_TO 1
+} {
+  din hub_0/cfg_data
+}
+
+# Create port_slicer
+cell pavel-demin:user:port_slicer slice_2 {
+  DIN_WIDTH 224 DIN_FROM 31 DIN_TO 16
+} {
+  din hub_0/cfg_data
+}
+
+# Create port_slicer
+cell pavel-demin:user:port_slicer slice_3 {
+  DIN_WIDTH 224 DIN_FROM 63 DIN_TO 32
+} {
+  din hub_0/cfg_data
+}
+
+# DDS
+
+for {set i 0} {$i <= 3} {incr i} {
+
+  # Create port_slicer
+  cell pavel-demin:user:port_slicer slice_[expr $i + 4] {
+    DIN_WIDTH 224 DIN_FROM [expr 32 * $i + 95] DIN_TO [expr 32 * $i + 64]
+  } {
+    din hub_0/cfg_data
+  }
+
+  # Create dds
+  cell pavel-demin:user:dds dds_$i {
+    NEGATIVE_SINE TRUE
+  } {
+    pinc slice_[expr $i + 4]/dout
+    aclk pll_0/clk_out1
+    aresetn rst_0/peripheral_aresetn
+  }
+
+}
+
+# RX
+
+for {set i 0} {$i <= 3} {incr i} {
+
+  # Create port_slicer
+  cell pavel-demin:user:port_slicer adc_slice_$i {
+    DIN_WIDTH 32 DIN_FROM [expr 16 * ($i / 2) + 15] DIN_TO [expr 16 * ($i / 2)]
+  } {
+    din adc_0/m_axis_tdata
+  }
+
+  # Create port_slicer
+  cell pavel-demin:user:port_slicer dds_slice_$i {
+    DIN_WIDTH 48 DIN_FROM [expr 24 * ($i % 2) + 23] DIN_TO [expr 24 * ($i % 2)]
+  } {
+    din dds_[expr $i / 2]/dout
+  }
+
+  # Create dsp48
+  cell pavel-demin:user:dsp48 mult_$i {
+    A_WIDTH 24
+    B_WIDTH 16
+    P_WIDTH 24
+  } {
+    A dds_slice_$i/dout
+    B adc_slice_$i/dout
+    CLK pll_0/clk_out1
+  }
+
+  # Create axis_variable
+  cell pavel-demin:user:axis_variable rate_$i {
+    AXIS_TDATA_WIDTH 16
+  } {
+    cfg_data slice_2/dout
+    aclk pll_0/clk_out1
+    aresetn slice_0/dout
+  }
+
+  # Create cic_compiler
+  cell xilinx.com:ip:cic_compiler cic_$i {
+    INPUT_DATA_WIDTH.VALUE_SRC USER
+    FILTER_TYPE Decimation
+    NUMBER_OF_STAGES 6
+    SAMPLE_RATE_CHANGES Programmable
+    MINIMUM_RATE 16
+    MAXIMUM_RATE 8192
+    FIXED_OR_INITIAL_RATE 16
+    INPUT_SAMPLE_FREQUENCY 125.0
+    CLOCK_FREQUENCY 125.0
+    INPUT_DATA_WIDTH 24
+    QUANTIZATION Truncation
+    OUTPUT_DATA_WIDTH 32
+    USE_XTREME_DSP_SLICE false
+    HAS_ARESETN true
+  } {
+    s_axis_data_tdata mult_$i/P
+    s_axis_data_tvalid const_0/dout
+    S_AXIS_CONFIG rate_$i/M_AXIS
+    aclk pll_0/clk_out1
+    aresetn slice_0/dout
+  }
+
+}
+
+# Create axis_combiner
+cell  xilinx.com:ip:axis_combiner comb_0 {
+  TDATA_NUM_BYTES.VALUE_SRC USER
+  TDATA_NUM_BYTES 4
+  NUM_SI 4
+} {
+  S00_AXIS cic_0/M_AXIS_DATA
+  S01_AXIS cic_1/M_AXIS_DATA
+  S02_AXIS cic_2/M_AXIS_DATA
+  S03_AXIS cic_3/M_AXIS_DATA
+  aclk pll_0/clk_out1
+  aresetn slice_0/dout
+}
+
+# Create axis_dwidth_converter
+cell xilinx.com:ip:axis_dwidth_converter conv_0 {
+  S_TDATA_NUM_BYTES.VALUE_SRC USER
+  S_TDATA_NUM_BYTES 16
+  M_TDATA_NUM_BYTES 4
+} {
+  S_AXIS comb_0/M_AXIS
+  aclk pll_0/clk_out1
+  aresetn slice_0/dout
+}
+
+# Create fir_compiler
+cell xilinx.com:ip:fir_compiler fir_0 {
+  DATA_WIDTH.VALUE_SRC USER
+  DATA_WIDTH 32
+  COEFFICIENTVECTOR {-2.6177133652e-08, -1.4524079986e-08, 2.3503924593e-08, 9.8626200289e-09, -1.1890667276e-08, 3.7165902334e-09, -1.1281600311e-08, -3.0422327166e-08, 4.8641400933e-08, 7.5370208703e-08, -1.0272204293e-07, -1.4463664328e-07, 1.7578783245e-07, 2.4524851197e-07, -2.6965605992e-07, -3.8514031197e-07, 3.8549173192e-07, 5.7304542240e-07, -5.2360991154e-07, -8.1834423180e-07, 6.8326668106e-07, 1.1308404569e-06, -8.6246816928e-07, -1.5204809508e-06, 1.0577850655e-06, 1.9969862785e-06, -1.2642184211e-06, -2.5694233683e-06, 1.4750897322e-06, 3.2456257641e-06, -1.6822155489e-06, -4.0319836063e-06, 1.8754901424e-06, 4.9323236980e-06, -2.0434780798e-06, -5.9475751962e-06, 2.1734883666e-06, 7.0750185052e-06, -2.2519707440e-06, -8.3076295670e-06, 2.2649637736e-06, 9.6333527365e-06, -2.1987749718e-06, -1.1034505939e-05, 2.0407264022e-06, 1.2487203074e-05, -1.7800795241e-06, -1.3960930010e-05, 1.4090099340e-06, 1.5418155681e-05, -9.2378039457e-07, -1.6814162085e-05, 3.2589666448e-07, 1.8096649235e-05, 3.7555482474e-07, -1.9207744894e-05, -1.1649346507e-06, 2.0081882138e-05, 2.0163521633e-06, -2.0648230510e-05, -2.8932537310e-06, 2.0831386488e-05, 3.7470661490e-06, -2.0552819111e-05, -4.5162363348e-06, 1.9732359302e-05, 5.1251641147e-06, -1.8290291325e-05, -5.4836348959e-06, 1.6149567422e-05, 5.4864449701e-06, -1.3238453889e-05, -5.0136606667e-06, 9.4931180475e-06, 3.9310992628e-06, -4.8605422392e-06, -2.0916894743e-06, -6.9990325670e-07, -6.6655014248e-07, 7.2070025194e-06, 4.5096171092e-06, -1.4664146934e-05, -9.6131292340e-06, 2.3050326806e-05, 1.6155386110e-05, -3.2318788564e-05, -2.4313460359e-05, 4.2394566115e-05, 3.4257988078e-05, -5.3173044874e-05, -4.6148003666e-05, 6.4518409809e-05, 6.0124602749e-05, -7.6263191408e-05, -7.6304367729e-05, 8.8208252012e-05, 9.4771763170e-05, -1.0012436740e-04, -1.1557164512e-04, 1.1175461646e-04, 1.3870061003e-04, -1.2282213435e-04, -1.6410995859e-04, 1.3301566346e-04, 1.9167183651e-04, -1.4202407845e-04, -2.2119724096e-04, 1.4952517167e-04, 2.5241854976e-04, -1.5519824619e-04, -2.8498377070e-04, 1.5873393070e-04, 3.1845032807e-04, -1.5984619841e-04, -3.5228110308e-04, 1.5828429343e-04, 3.8584061925e-04, -1.5384654220e-04, -4.1839322856e-04, 1.4639445457e-04, 4.4910180956e-04, -1.3586892616e-04, -4.7702894380e-04, 1.2230705179e-04, 5.0113799536e-04, -1.0587052996e-04, -5.2032777594e-04, 8.6810880335e-05, 5.3336912590e-04, -6.5564547962e-05, -5.3898448900e-04, 4.2719251502e-05, 5.3583146805e-04, -1.9041395181e-05, -5.2251873805e-04, -4.5078046913e-06, 4.9762169345e-04, 2.6756131813e-05, -4.5970179037e-04, -4.6307390741e-05, 4.0732593175e-04, 6.1528477322e-05, -3.3908837930e-04, -7.0539006202e-05, 2.5363216860e-04, 7.1200387397e-05, -1.4967208165e-04, -6.1105181986e-05, 2.6014170801e-05, 3.7539047173e-05, 1.1834074078e-04, 2.3872330526e-06, -2.8436098654e-04, -6.1952164918e-05, 4.7277121169e-04, 1.4469298414e-04, -6.8410395793e-04, -2.5444086076e-04, 9.1867149361e-04, 3.9533012024e-04, -1.1765433548e-03, -5.7180993116e-04, 1.4575240218e-03, 7.8865732989e-04, -1.7611351936e-03, -1.0509982698e-03, 2.0865990246e-03, 1.3643359116e-03, -2.4328266350e-03, -1.7345940577e-03, 2.7984107288e-03, 2.1681840443e-03, -3.1816297492e-03, -2.6721774229e-03, 3.5802065894e-03, 3.2540077388e-03, -3.9918628939e-03, -3.9222472302e-03, 4.4137475920e-03, 4.6864095518e-03, -4.8426503748e-03, -5.5573227440e-03, 5.2749665389e-03, 6.5475260650e-03, -5.7066584761e-03, -7.6718062107e-03, 6.1331974805e-03, 8.9479358704e-03, -6.5494758129e-03, -1.0397711632e-02, 6.9496637045e-03, 1.2048427549e-02, -7.3269847721e-03, -1.3935013360e-02, 7.6733651256e-03, 1.6103239573e-02, -7.9788697206e-03, -1.8614942837e-02, 8.2295486564e-03, 2.1553607250e-02, -8.4082240783e-03, -2.5039478317e-02, 8.4884356702e-03, 2.9248217990e-02, -8.4289898648e-03, -3.4447912774e-02, 8.1605331760e-03, 4.1068293529e-02, -7.5558809760e-03, -4.9841905511e-02, 6.3570650746e-03, 6.2121600286e-02, -3.9694870764e-03, -8.0692005870e-02, -1.2397718074e-03, 1.1224026301e-01, 1.5101805210e-02, -1.7700698012e-01, -7.0090832520e-02, 3.6077918954e-01, 6.1483179497e-01, 3.6077918954e-01, -7.0090832520e-02, -1.7700698012e-01, 1.5101805210e-02, 1.1224026301e-01, -1.2397718074e-03, -8.0692005870e-02, -3.9694870764e-03, 6.2121600286e-02, 6.3570650746e-03, -4.9841905511e-02, -7.5558809760e-03, 4.1068293529e-02, 8.1605331760e-03, -3.4447912774e-02, -8.4289898648e-03, 2.9248217990e-02, 8.4884356702e-03, -2.5039478317e-02, -8.4082240783e-03, 2.1553607250e-02, 8.2295486564e-03, -1.8614942837e-02, -7.9788697206e-03, 1.6103239573e-02, 7.6733651256e-03, -1.3935013360e-02, -7.3269847721e-03, 1.2048427549e-02, 6.9496637045e-03, -1.0397711632e-02, -6.5494758129e-03, 8.9479358704e-03, 6.1331974805e-03, -7.6718062107e-03, -5.7066584761e-03, 6.5475260650e-03, 5.2749665389e-03, -5.5573227440e-03, -4.8426503748e-03, 4.6864095518e-03, 4.4137475920e-03, -3.9222472302e-03, -3.9918628939e-03, 3.2540077388e-03, 3.5802065894e-03, -2.6721774229e-03, -3.1816297492e-03, 2.1681840443e-03, 2.7984107288e-03, -1.7345940577e-03, -2.4328266350e-03, 1.3643359116e-03, 2.0865990246e-03, -1.0509982698e-03, -1.7611351936e-03, 7.8865732989e-04, 1.4575240218e-03, -5.7180993116e-04, -1.1765433548e-03, 3.9533012024e-04, 9.1867149361e-04, -2.5444086076e-04, -6.8410395793e-04, 1.4469298414e-04, 4.7277121169e-04, -6.1952164918e-05, -2.8436098654e-04, 2.3872330526e-06, 1.1834074078e-04, 3.7539047173e-05, 2.6014170801e-05, -6.1105181986e-05, -1.4967208165e-04, 7.1200387397e-05, 2.5363216860e-04, -7.0539006202e-05, -3.3908837930e-04, 6.1528477322e-05, 4.0732593175e-04, -4.6307390741e-05, -4.5970179037e-04, 2.6756131813e-05, 4.9762169345e-04, -4.5078046913e-06, -5.2251873805e-04, -1.9041395181e-05, 5.3583146805e-04, 4.2719251502e-05, -5.3898448900e-04, -6.5564547962e-05, 5.3336912590e-04, 8.6810880335e-05, -5.2032777594e-04, -1.0587052996e-04, 5.0113799536e-04, 1.2230705179e-04, -4.7702894380e-04, -1.3586892616e-04, 4.4910180956e-04, 1.4639445457e-04, -4.1839322856e-04, -1.5384654220e-04, 3.8584061925e-04, 1.5828429343e-04, -3.5228110308e-04, -1.5984619841e-04, 3.1845032807e-04, 1.5873393070e-04, -2.8498377070e-04, -1.5519824619e-04, 2.5241854976e-04, 1.4952517167e-04, -2.2119724096e-04, -1.4202407845e-04, 1.9167183651e-04, 1.3301566346e-04, -1.6410995859e-04, -1.2282213435e-04, 1.3870061003e-04, 1.1175461646e-04, -1.1557164512e-04, -1.0012436740e-04, 9.4771763170e-05, 8.8208252012e-05, -7.6304367729e-05, -7.6263191408e-05, 6.0124602749e-05, 6.4518409809e-05, -4.6148003666e-05, -5.3173044874e-05, 3.4257988078e-05, 4.2394566115e-05, -2.4313460359e-05, -3.2318788564e-05, 1.6155386110e-05, 2.3050326806e-05, -9.6131292340e-06, -1.4664146934e-05, 4.5096171092e-06, 7.2070025194e-06, -6.6655014248e-07, -6.9990325670e-07, -2.0916894743e-06, -4.8605422392e-06, 3.9310992628e-06, 9.4931180475e-06, -5.0136606667e-06, -1.3238453889e-05, 5.4864449701e-06, 1.6149567422e-05, -5.4836348959e-06, -1.8290291325e-05, 5.1251641147e-06, 1.9732359302e-05, -4.5162363348e-06, -2.0552819111e-05, 3.7470661490e-06, 2.0831386488e-05, -2.8932537310e-06, -2.0648230510e-05, 2.0163521633e-06, 2.0081882138e-05, -1.1649346507e-06, -1.9207744894e-05, 3.7555482474e-07, 1.8096649235e-05, 3.2589666448e-07, -1.6814162085e-05, -9.2378039457e-07, 1.5418155681e-05, 1.4090099340e-06, -1.3960930010e-05, -1.7800795241e-06, 1.2487203074e-05, 2.0407264022e-06, -1.1034505939e-05, -2.1987749718e-06, 9.6333527365e-06, 2.2649637736e-06, -8.3076295670e-06, -2.2519707440e-06, 7.0750185052e-06, 2.1734883666e-06, -5.9475751962e-06, -2.0434780798e-06, 4.9323236980e-06, 1.8754901424e-06, -4.0319836063e-06, -1.6822155489e-06, 3.2456257641e-06, 1.4750897322e-06, -2.5694233683e-06, -1.2642184211e-06, 1.9969862785e-06, 1.0577850655e-06, -1.5204809508e-06, -8.6246816928e-07, 1.1308404569e-06, 6.8326668106e-07, -8.1834423180e-07, -5.2360991154e-07, 5.7304542240e-07, 3.8549173192e-07, -3.8514031197e-07, -2.6965605992e-07, 2.4524851197e-07, 1.7578783245e-07, -1.4463664328e-07, -1.0272204293e-07, 7.5370208703e-08, 4.8641400933e-08, -3.0422327166e-08, -1.1281600311e-08, 3.7165902334e-09, -1.1890667276e-08, 9.8626200289e-09, 2.3503924593e-08, -1.4524079986e-08, -2.6177133652e-08}
+  COEFFICIENT_WIDTH 24
+  QUANTIZATION Quantize_Only
+  BESTPRECISION true
+  FILTER_TYPE Decimation
+  DECIMATION_RATE 2
+  NUMBER_CHANNELS 4
+  NUMBER_PATHS 1
+  SAMPLE_FREQUENCY 7.8125
+  CLOCK_FREQUENCY 125.0
+  OUTPUT_ROUNDING_MODE Convergent_Rounding_to_Even
+  OUTPUT_WIDTH 26
+  M_DATA_HAS_TREADY true
+  HAS_ARESETN true
+} {
+  S_AXIS_DATA conv_0/M_AXIS
+  aclk pll_0/clk_out1
+  aresetn slice_0/dout
+}
+
+# Create axis_subset_converter
+cell xilinx.com:ip:axis_subset_converter subset_0 {
+  S_TDATA_NUM_BYTES.VALUE_SRC USER
+  M_TDATA_NUM_BYTES.VALUE_SRC USER
+  S_TDATA_NUM_BYTES 4
+  M_TDATA_NUM_BYTES 3
+  TDATA_REMAP {tdata[23:0]}
+} {
+  S_AXIS fir_0/M_AXIS_DATA
+  aclk pll_0/clk_out1
+  aresetn slice_0/dout
+}
+
+# Create floating_point
+cell xilinx.com:ip:floating_point fp_0 {
+  OPERATION_TYPE Fixed_to_float
+  A_PRECISION_TYPE.VALUE_SRC USER
+  C_A_EXPONENT_WIDTH.VALUE_SRC USER
+  C_A_FRACTION_WIDTH.VALUE_SRC USER
+  A_PRECISION_TYPE Custom
+  C_A_EXPONENT_WIDTH 2
+  C_A_FRACTION_WIDTH 22
+  RESULT_PRECISION_TYPE Single
+  HAS_ARESETN true
+} {
+  S_AXIS_A subset_0/M_AXIS
+  aclk pll_0/clk_out1
+  aresetn slice_0/dout
+}
+
+# DMA
+
+# Create xlconstant
+cell xilinx.com:ip:xlconstant const_1 {
+  CONST_WIDTH 16
+  CONST_VAL 65535
+}
+
+# Create axis_ram_writer
+cell pavel-demin:user:axis_ram_writer writer_0 {
+  ADDR_WIDTH 16
+  AXI_ID_WIDTH 3
+  AXIS_TDATA_WIDTH 32
+  FIFO_WRITE_DEPTH 1024
+} {
+  S_AXIS fp_0/M_AXIS_RESULT
+  M_AXI ps_0/S_AXI_ACP
+  min_addr slice_3/dout
+  cfg_data const_1/dout
+  sts_data hub_0/sts_data
+  aclk pll_0/clk_out1
+  aresetn slice_1/dout
+}
+
+# GEN
+
+for {set i 0} {$i <= 1} {incr i} {
+
+  # Create port_slicer
+  cell pavel-demin:user:port_slicer slice_[expr $i + 8] {
+    DIN_WIDTH 224 DIN_FROM [expr 16 * $i + 207] DIN_TO [expr 16 * $i + 192]
+  } {
+    din hub_0/cfg_data
+  }
+
+  # Create dsp48
+  cell pavel-demin:user:dsp48 mult_[expr $i + 4] {
+    A_WIDTH 24
+    B_WIDTH 16
+    P_WIDTH 14
+  } {
+    A dds_[expr $i + 2]/dout
+    B slice_[expr $i + 8]/dout
+    CLK pll_0/clk_out1
+  }
+
+}
+
+# Create xlconcat
+cell xilinx.com:ip:xlconcat concat_0 {
+  NUM_PORTS 2
+  IN0_WIDTH 16
+  IN1_WIDTH 16
+} {
+  In0 mult_4/P
+  In1 mult_5/P
+  dout dac_0/s_axis_tdata
+}
