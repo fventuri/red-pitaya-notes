@@ -1,13 +1,13 @@
-alpine_url=http://dl-cdn.alpinelinux.org/alpine/v3.22
+alpine_url=http://dl-cdn.alpinelinux.org/alpine/v3.23
 
-tools_tar=apk-tools-static-2.14.9-r3.apk
+tools_tar=apk-tools-static-3.0.2-r0.apk
 tools_url=$alpine_url/main/armv7/$tools_tar
 
-firmware_tar=linux-firmware-other-20250509-r0.apk
+firmware_tar=linux-firmware-other-20251125-r1.apk
 firmware_url=$alpine_url/main/armv7/$firmware_tar
 
-linux_dir=tmp/linux-6.12
-linux_ver=6.12.52-xilinx
+linux_dir=tmp/linux-6.18
+linux_ver=6.18-xilinx
 
 modules_dir=alpine-modloop/lib/modules/$linux_ver
 
@@ -19,7 +19,7 @@ test -f $tools_tar || curl -L $tools_url -o $tools_tar
 
 test -f $firmware_tar || curl -L $firmware_url -o $firmware_tar
 
-for tar in linux-firmware-ath9k_htc-20250509-r0.apk linux-firmware-brcm-20250509-r0.apk linux-firmware-cypress-20250509-r0.apk linux-firmware-rtlwifi-20250509-r0.apk
+for tar in linux-firmware-ath9k_htc-20251125-r1.apk linux-firmware-brcm-20251125-r1.apk linux-firmware-cypress-20251125-r1.apk linux-firmware-rtlwifi-20251125-r1.apk
 do
   url=$alpine_url/main/armv7/$tar
   test -f $tar || curl -L $url -o $tar
@@ -38,7 +38,7 @@ depmod -a -b alpine-modloop $linux_ver
 
 tar -zxf $firmware_tar --directory=alpine-modloop/lib/modules --warning=no-unknown-keyword --strip-components=1 --wildcards lib/firmware/ar* lib/firmware/rt*
 
-for tar in linux-firmware-ath9k_htc-20250509-r0.apk linux-firmware-brcm-20250509-r0.apk linux-firmware-cypress-20250509-r0.apk linux-firmware-rtlwifi-20250509-r0.apk
+for tar in linux-firmware-ath9k_htc-20251125-r1.apk linux-firmware-brcm-20251125-r1.apk linux-firmware-cypress-20251125-r1.apk linux-firmware-rtlwifi-20251125-r1.apk
 do
   tar -zxf $tar --directory=alpine-modloop/lib/modules --warning=no-unknown-keyword --strip-components=1
 done
@@ -55,9 +55,8 @@ cp /usr/bin/qemu-arm-static $root_dir/usr/bin/
 mkdir -p $root_dir/etc
 cp /etc/resolv.conf $root_dir/etc/
 
-mkdir -p $root_dir/etc/apk
-mkdir -p $root_dir/media/mmcblk0p1/cache
-ln -s /media/mmcblk0p1/cache $root_dir/etc/apk/cache
+mkdir -p $root_dir/etc/apk/cache
+mkdir -p $root_dir/media/mmcblk0p1
 
 cp -r alpine/etc $root_dir/
 sed -i '1,2d' $root_dir/etc/local.d/apps.start
@@ -70,7 +69,10 @@ cp tmp/$project.bit $root_dir/media/mmcblk0p1/apps/$project/
 
 cp -r alpine-apk/sbin $root_dir/
 
-chroot $root_dir /sbin/apk.static --repository $alpine_url/main --update-cache --allow-untrusted --initdb add alpine-base
+$root_dir/sbin/apk.static --root $root_dir --repository $alpine_url/main --update-cache --allow-untrusted --initdb add alpine-base
+
+mv $root_dir/etc/apk/cache $root_dir/media/mmcblk0p1/
+ln -s /media/mmcblk0p1/cache $root_dir/etc/apk/cache
 
 echo $alpine_url/main > $root_dir/etc/apk/repositories
 echo $alpine_url/community >> $root_dir/etc/apk/repositories
@@ -156,6 +158,6 @@ hostname -F /etc/hostname
 
 rm -rf $root_dir alpine-apk
 
-zip -r red-pitaya-alpine-3.22-armv7-`date +%Y%m%d`-$project.zip apps boot.bin cache modloop red-pitaya.apkovl.tar.gz start.sh wifi
+zip -r red-pitaya-alpine-3.23-armv7-`date +%Y%m%d`-$project.zip apps boot.bin cache modloop red-pitaya.apkovl.tar.gz start.sh wifi
 
 rm -rf apps cache modloop red-pitaya.apkovl.tar.gz start.sh wifi

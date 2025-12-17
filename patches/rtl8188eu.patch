@@ -1,0 +1,71 @@
+diff -rupN old/core/crypto/sha256.c rtl8188eu/core/crypto/sha256.c
+--- old/core/crypto/sha256.c	2025-10-12 08:20:27.000000000 -0400
++++ rtl8188eu/core/crypto/sha256.c	2025-12-05 21:02:59.911313955 -0500
+@@ -86,19 +86,3 @@ int hmac_sha256_vector(const u8 *key, si
+ 	_len[1] = SHA256_MAC_LEN;
+ 	return sha256_vector(2, _addr, _len, mac);
+ }
+-
+-
+-/**
+- * hmac_sha256 - HMAC-SHA256 over data buffer (RFC 2104)
+- * @key: Key for HMAC operations
+- * @key_len: Length of the key in bytes
+- * @data: Pointers to the data area
+- * @data_len: Length of the data area
+- * @mac: Buffer for the hash (32 bytes)
+- * Returns: 0 on success, -1 on failure
+- */
+-int hmac_sha256(const u8 *key, size_t key_len, const u8 *data,
+-		size_t data_len, u8 *mac)
+-{
+-	return hmac_sha256_vector(key, key_len, 1, &data, &data_len, mac);
+-}
+diff -rupN old/core/crypto/sha256.h rtl8188eu/core/crypto/sha256.h
+--- old/core/crypto/sha256.h	2025-10-12 08:20:27.000000000 -0400
++++ rtl8188eu/core/crypto/sha256.h	2025-12-05 21:02:14.615579585 -0500
+@@ -13,8 +13,6 @@
+ 
+ int hmac_sha256_vector(const u8 *key, size_t key_len, size_t num_elem,
+ 		       const u8 *addr[], const size_t *len, u8 *mac);
+-int hmac_sha256(const u8 *key, size_t key_len, const u8 *data,
+-		size_t data_len, u8 *mac);
+ int sha256_prf(const u8 *key, size_t key_len, const char *label,
+ 	       const u8 *data, size_t data_len, u8 *buf, size_t buf_len);
+ int sha256_prf_bits(const u8 *key, size_t key_len, const char *label,
+diff -rupN old/os_dep/linux/ioctl_cfg80211.c rtl8188eu/os_dep/linux/ioctl_cfg80211.c
+--- old/os_dep/linux/ioctl_cfg80211.c	2025-10-12 08:20:27.000000000 -0400
++++ rtl8188eu/os_dep/linux/ioctl_cfg80211.c	2025-12-05 22:12:34.957221103 -0500
+@@ -3584,7 +3584,12 @@ static void cfg80211_rtw_abort_scan(stru
+ }
+ #endif
+ 
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0))
++static int cfg80211_rtw_set_wiphy_params(struct wiphy *wiphy, int radio_idx,
++					 u32 changed)
++#else
+ static int cfg80211_rtw_set_wiphy_params(struct wiphy *wiphy, u32 changed)
++#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)) */
+ {
+ #if 0
+ 	struct iwm_priv *iwm = wiphy_to_iwm(wiphy);
+@@ -4569,6 +4574,9 @@ static int cfg80211_rtw_set_txpower(stru
+ #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0))
+ 	struct wireless_dev *wdev,
+ #endif
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0))
++	int radio_idx,
++#endif
+ #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36)) || defined(COMPAT_KERNEL_RELEASE)
+ 	enum nl80211_tx_power_setting type, int mbm)
+ #else
+@@ -4631,6 +4639,9 @@ static int cfg80211_rtw_get_txpower(stru
+ #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0))
+ 	struct wireless_dev *wdev,
+ #endif
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0))
++	int radio_idx,
++#endif
+ #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 14, 0))
+ 	unsigned int link_id,
+ #endif

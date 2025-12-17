@@ -1,13 +1,13 @@
-alpine_url=http://dl-cdn.alpinelinux.org/alpine/v3.22
+alpine_url=http://dl-cdn.alpinelinux.org/alpine/v3.23
 
-tools_tar=apk-tools-static-2.14.9-r3.apk
+tools_tar=apk-tools-static-3.0.2-r0.apk
 tools_url=$alpine_url/main/armv7/$tools_tar
 
-firmware_tar=linux-firmware-other-20250509-r0.apk
+firmware_tar=linux-firmware-other-20251125-r1.apk
 firmware_url=$alpine_url/main/armv7/$firmware_tar
 
-linux_dir=tmp/linux-6.12
-linux_ver=6.12.52-xilinx
+linux_dir=tmp/linux-6.18
+linux_ver=6.18-xilinx
 
 modules_dir=alpine-modloop/lib/modules/$linux_ver
 
@@ -17,7 +17,7 @@ test -f $tools_tar || curl -L $tools_url -o $tools_tar
 
 test -f $firmware_tar || curl -L $firmware_url -o $firmware_tar
 
-for tar in linux-firmware-ath9k_htc-20250509-r0.apk linux-firmware-brcm-20250509-r0.apk linux-firmware-cypress-20250509-r0.apk linux-firmware-rtlwifi-20250509-r0.apk
+for tar in linux-firmware-ath9k_htc-20251125-r1.apk linux-firmware-brcm-20251125-r1.apk linux-firmware-cypress-20251125-r1.apk linux-firmware-rtlwifi-20251125-r1.apk
 do
   url=$alpine_url/main/armv7/$tar
   test -f $tar || curl -L $url -o $tar
@@ -36,7 +36,7 @@ depmod -a -b alpine-modloop $linux_ver
 
 tar -zxf $firmware_tar --directory=alpine-modloop/lib/modules --warning=no-unknown-keyword --strip-components=1 --wildcards lib/firmware/ar* lib/firmware/rt*
 
-for tar in linux-firmware-ath9k_htc-20250509-r0.apk linux-firmware-brcm-20250509-r0.apk linux-firmware-cypress-20250509-r0.apk linux-firmware-rtlwifi-20250509-r0.apk
+for tar in linux-firmware-ath9k_htc-20251125-r1.apk linux-firmware-brcm-20251125-r1.apk linux-firmware-cypress-20251125-r1.apk linux-firmware-rtlwifi-20251125-r1.apk
 do
   tar -zxf $tar --directory=alpine-modloop/lib/modules --warning=no-unknown-keyword --strip-components=1
 done
@@ -53,9 +53,8 @@ cp /usr/bin/qemu-arm-static $root_dir/usr/bin/
 mkdir -p $root_dir/etc
 cp /etc/resolv.conf $root_dir/etc/
 
-mkdir -p $root_dir/etc/apk
-mkdir -p $root_dir/media/mmcblk0p1/cache
-ln -s /media/mmcblk0p1/cache $root_dir/etc/apk/cache
+mkdir -p $root_dir/etc/apk/cache
+mkdir -p $root_dir/media/mmcblk0p1
 
 cp -r alpine/etc $root_dir/
 cp -r alpine/apps $root_dir/media/mmcblk0p1/
@@ -64,7 +63,10 @@ projects="common_tools led_blinker mcpha playground pulsed_nmr sdr_receiver sdr_
 
 projects_122_88="led_blinker_122_88 pulsed_nmr_122_88 sdr_receiver_122_88 sdr_receiver_hpsdr_122_88 sdr_receiver_wide_122_88 sdr_transceiver_122_88 sdr_transceiver_ft8_122_88 sdr_transceiver_hpsdr_122_88 sdr_transceiver_wspr_122_88 vna_122_88"
 
-for p in $projects $projects_122_88
+projects_trx_duo="common_tools led_blinker mcpha_trx_duo playground pulsed_nmr_trx_duo sdr_receiver_trx_duo sdr_receiver_hpsdr_trx_duo sdr_receiver_wide_trx_duo sdr_transceiver_trx_duo sdr_transceiver_ft8_trx_duo sdr_transceiver_hpsdr_trx_duo sdr_transceiver_wide_trx_duo sdr_transceiver_wspr_trx_duo vna_trx_duo"
+
+#for p in $projects $projects_122_88
+for p in $projects_trx_duo
 do
   mkdir -p $root_dir/media/mmcblk0p1/apps/$p
   cp -r projects/$p/server/* $root_dir/media/mmcblk0p1/apps/$p/
@@ -74,7 +76,10 @@ done
 
 cp -r alpine-apk/sbin $root_dir/
 
-chroot $root_dir /sbin/apk.static --repository $alpine_url/main --update-cache --allow-untrusted --initdb add alpine-base
+$root_dir/sbin/apk.static --root $root_dir --repository $alpine_url/main --update-cache --allow-untrusted --initdb add alpine-base
+
+mv $root_dir/etc/apk/cache $root_dir/media/mmcblk0p1/
+ln -s /media/mmcblk0p1/cache $root_dir/etc/apk/cache
 
 echo $alpine_url/main > $root_dir/etc/apk/repositories
 echo $alpine_url/community >> $root_dir/etc/apk/repositories
@@ -82,7 +87,7 @@ echo $alpine_url/community >> $root_dir/etc/apk/repositories
 chroot $root_dir /bin/sh <<- EOF_CHROOT
 
 apk update
-apk add openssh u-boot-tools ucspi-tcp6 iw wpa_supplicant dhcpcd dnsmasq hostapd iptables avahi dbus dcron chrony gpsd libgfortran musl-dev libconfig-dev alsa-lib-dev alsa-utils curl wget less nano bc dos2unix
+apk add openssh u-boot-tools ucspi-tcp6 iw wpa_supplicant dhcpcd dnsmasq hostapd iptables avahi dbus dcron chrony gpsd libgfortran musl-dev libconfig-dev alsa-lib-dev alsa-utils curl wget less nano bc dos2unix dmesg ethtool
 
 rc-update add bootmisc boot
 rc-update add hostname boot
@@ -119,9 +124,9 @@ sed -i 's/^SAVE_ON_STOP=.*/SAVE_ON_STOP="no"/;s/^IPFORWARD=.*/IPFORWARD="yes"/' 
 
 sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' etc/ssh/sshd_config
 
-echo root:$passwd | chpasswd
+echo "root:$passwd" | chpasswd
 
-hostname red-pitaya
+hostname trx-duo
 
 sed -i 's/^# LBU_MEDIA=.*/LBU_MEDIA=mmcblk0p1/' etc/lbu/lbu.conf
 
@@ -136,9 +141,7 @@ ln -s /media/mmcblk0p1/wifi root/wifi
 lbu add root
 lbu delete etc/resolv.conf
 lbu delete etc/cron.d/ft8
-lbu delete etc/cron.d/ft8_122_88
 lbu delete etc/cron.d/wspr
-lbu delete etc/cron.d/wspr_122_88
 lbu delete root/.ash_history
 
 lbu commit -d
@@ -165,7 +168,8 @@ tar -zxf \$wsprd_tar --strip-components=1 --directory=\$wsprd_dir
 rm \$wsprd_tar
 make -C \$wsprd_dir
 
-for p in server $projects $projects_122_88
+#for p in server $projects $projects_122_88
+for p in server $projects_trx_duo
 do
   make -C /media/mmcblk0p1/apps/\$p clean
   make -C /media/mmcblk0p1/apps/\$p
@@ -175,7 +179,7 @@ EOF_CHROOT
 
 cp -r $root_dir/media/mmcblk0p1/apps .
 cp -r $root_dir/media/mmcblk0p1/cache .
-cp $root_dir/media/mmcblk0p1/red-pitaya.apkovl.tar.gz .
+cp $root_dir/media/mmcblk0p1/trx-duo.apkovl.tar.gz .
 
 cp -r alpine/wifi .
 
@@ -183,6 +187,21 @@ hostname -F /etc/hostname
 
 rm -rf $root_dir alpine-apk
 
-zip -r red-pitaya-alpine-3.22-armv7-`date +%Y%m%d`.zip apps boot.bin cache modloop red-pitaya.apkovl.tar.gz wifi
+# split in 25MB parts so they can be uploaded to GitHub - fv
+zipprefix=red-pitaya-alpine-3.23-armv7-`date +%Y%m%d`
+rm $zipprefix.z*
+zip -r -s 25m $zipprefix.zip apps boot.bin cache modloop trx-duo.apkovl.tar.gz wifi
 
-rm -rf apps cache modloop red-pitaya.apkovl.tar.gz wifi
+# compute and save checksums
+cksums=$zipprefix.cksums
+> $cksums
+echo "MD5 checksums" >> $cksums
+md5sum $zipprefix.z* >> $cksums
+echo >> $cksums
+echo "SHA1 checksums" >> $cksums
+sha1sum $zipprefix.z* >> $cksums
+echo >> $cksums
+echo "SHA256 checksums" >> $cksums
+sha256sum $zipprefix.z* >> $cksums
+
+rm -rf apps cache modloop trx-duo.apkovl.tar.gz wifi
