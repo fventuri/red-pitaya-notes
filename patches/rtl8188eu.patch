@@ -1,0 +1,5 @@
+# This patch is no longer needed.
+# The rtl8188eu-main upstream now includes kernel 6.17+ compatibility:
+# radio_idx param in set_wiphy_params, set_txpower, get_txpower (KERNEL_VERSION(6,17,0) guards),
+# and removal of hmac_sha256 from core/crypto/sha256.c/.h.
+# All changes here are already present in the upstream source.

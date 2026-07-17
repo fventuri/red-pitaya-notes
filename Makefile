@@ -14,6 +14,8 @@ PROC = ps7_cortexa9_0
 
 VIVADO = vivado -nolog -nojournal -mode batch
 XSCT = xsct
+VITIS = vitis
+SDTGEN = sdtgen
 RM = rm -rf
 
 INITRAMFS_TAG = 3.24
@@ -71,6 +73,7 @@ $(LINUX_DIR): $(LINUX_TAR) $(RTL8188_TAR)
 	cp patches/cma.c $@/drivers/char
 	cp patches/xilinx_devcfg.c $@/drivers/char
 	cp patches/xilinx_zynq_defconfig $@/arch/arm/configs
+	-patch -d $@/drivers/net/wireless/realtek/rtl8188eu -p 1 < patches/rtl8188eu.patch
 
 $(DTREE_DIR): $(DTREE_TAR)
 	mkdir -p $@
@@ -105,7 +108,7 @@ initrd.dtb: tmp/$(NAME).tree/system-top.dts
 rootfs.dtb: tmp/$(NAME).tree/system-top.dts
 	dtc -I dts -O dtb -o $@ -i tmp/$(NAME).tree -i dts dts/rootfs.dts
 
-tmp/%.xpr: projects/% $(addprefix tmp/, $(CORES))
+tmp/%.xpr: projects/%
 	mkdir -p $(@D)
 	$(VIVADO) -source scripts/project.tcl -tclargs $* $(PART)
 
@@ -119,14 +122,11 @@ tmp/%.bit: tmp/%.xpr
 
 tmp/%.fsbl/executable.elf: tmp/%.xsa
 	mkdir -p $(@D)
-	$(XSCT) scripts/fsbl.tcl $* $(PROC)
-	cp patches/red_pitaya_fsbl_hooks.c $(@D)
-	patch $(@D)/fsbl_hooks.c patches/fsbl.patch
-	make -C $(@D)
+	$(VITIS) -s scripts/fsbl.py $* $(PROC)
 
 tmp/%.tree/system-top.dts: tmp/%.xsa $(DTREE_DIR)
 	mkdir -p $(@D)
-	$(XSCT) scripts/devicetree.tcl $* $(PROC) $(DTREE_DIR)
+	$(SDTGEN) scripts/devicetree.tcl $* $(PROC) $(DTREE_DIR)
 	sed -i 's|#include|/include/|' $@
 
 clean:

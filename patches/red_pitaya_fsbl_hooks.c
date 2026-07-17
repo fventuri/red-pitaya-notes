@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "xparameters.h"
 #include "xiicps.h"
 #include "xemacps.h"
 
@@ -19,7 +20,11 @@ u32 SetMacAddress()
   Buffer[0] = 0x18;
   Buffer[1] = 0;
 
+#ifdef SDT
+  IicConfig = XIicPs_LookupConfig(XPAR_XIICPS_0_BASEADDR);
+#else
   IicConfig = XIicPs_LookupConfig(XPAR_PS7_I2C_0_DEVICE_ID);
+#endif
   if(IicConfig == NULL) return XST_FAILURE;
 
   Status = XIicPs_CfgInitialize(&Iic, IicConfig, IicConfig->BaseAddress);
@@ -45,7 +50,11 @@ u32 SetMacAddress()
     Buffer[i] = strtol(Pointer + 1, &Pointer, 16);
   }
 
+#ifdef SDT
+  EmacConfig = XEmacPs_LookupConfig(XPAR_XEMACPS_0_BASEADDR);
+#else
   EmacConfig = XEmacPs_LookupConfig(XPAR_PS7_ETHERNET_0_DEVICE_ID);
+#endif
   if(EmacConfig == NULL) return XST_FAILURE;
 
   Status = XEmacPs_CfgInitialize(&Emac, EmacConfig, EmacConfig->BaseAddress);
