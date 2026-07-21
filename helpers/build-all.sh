@@ -12,7 +12,7 @@ make NAME=led_blinker all
 #
 #printf "%s\n" $PRJS | xargs -n 1 -P $JOBS -I {} make NAME={} PART=xc7z020clg400-1 bit
 
-PRJS="mcpha_trx_duo playground pulsed_nmr_trx_duo sdr_receiver_trx_duo sdr_receiver_hpsdr_trx_duo sdr_receiver_wide_trx_duo sdr_transceiver_trx_duo sdr_transceiver_ft8_trx_duo sdr_transceiver_hpsdr_trx_duo sdr_transceiver_wide_trx_duo sdr_transceiver_wspr_trx_duo vna_trx_duo"
+PRJS="mcpha_trx_duo playground pulsed_nmr_trx_duo sdr_receiver_trx_duo sdr_receiver_hpsdr_trx_duo sdr_receiver_hpsdr2_trx_duo sdr_receiver_wide_trx_duo sdr_transceiver_trx_duo sdr_transceiver_ft8_trx_duo sdr_transceiver_hpsdr_trx_duo sdr_transceiver_wide_trx_duo sdr_transceiver_wspr_trx_duo vna_trx_duo"
 
 printf "%s\n" $PRJS | xargs -n 1 -P $JOBS -I {} make NAME={} PART=xc7z010clg400-1 bit
 
