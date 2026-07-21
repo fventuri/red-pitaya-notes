@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SDR receiver compatible with HPSDR Protocol 2 (1536 ksps, extrawide)</title>
+<link rel="stylesheet" href="/css/main.css">
+<link rel="stylesheet" href="/css/pygments.css">
+</head>
+<body>
+<div id="header">
+<div id="logo">
+<a href="/">Back to all apps</a>
+</div>
+<div id="menu">
+<a href="https://github.com/fventuri/red-pitaya-notes" target="_blank">Source</a>
+<a href="https://github.com/fventuri/red-pitaya-notes/issues" target="_blank">Issues</a>
+</div>
+</div>
+<div id="content">
+<h1>SDR receiver compatible with HPSDR Protocol 2 (extrawide, up to 1536 ksps)</h1>
+<p>The SDR receiver is ready.</p>
+<p><strong>Note:</strong> this receiver uses the cache-coherent ACP/DMA data path.
+Reboot the board before switching to the other openHPSDR Protocol 2 receiver (or to
+another app) &mdash; reprogramming the FPGA while the ACP port is active hangs the DMA.</p>
+<p>Now you can run the SDR programs that support the openHPSDR
+<a href="https://github.com/TAPR/OpenHPSDR-Firmware/tree/master/Protocol%202" target="_blank">Ethernet Protocol 2</a>.
+This receiver presents up to 4 DDCs at sample rates of 48/96/192/384/768/1536 ksps
+(1536 ksps gives ~691 kHz usable bandwidth; work in progress).</p>
+<h2>SDR programs</h2>
+<p>Here is a list of the SDR programs that are known to work with the openHPSDR Protocol 2:</p>
+<ul>
+<li><a href="https://github.com/g0orx/linhpsdr" target="_blank">linhpsdr</a> (Linux)</li>
+<li><a href="https://github.com/g0orx/pihpsdr" target="_blank">piHPSDR</a> (Linux / Raspberry Pi)</li>
+<li><a href="https://github.com/ramdor/Thetis" target="_blank">Thetis</a> (Windows)</li>
+</ul>
+</div>
+</body>
+</html>
