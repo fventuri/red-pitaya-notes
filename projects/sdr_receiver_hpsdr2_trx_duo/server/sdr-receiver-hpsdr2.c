@@ -36,7 +36,7 @@
 /* ---- configuration (parametrized; the wide sibling uses NUM_DDC 6) ---- */
 #define NUM_DDC            8       /* DDCs implemented in the FPGA           */
 #define BOARD_TYPE         3       /* linhpsdr device enum: Angelia (2 ADCs) */
-#define CODE_VERSION       101     /* firmware/code version (discovery [13]) */
+#define CODE_VERSION       1       /* firmware/code version (discovery [13]) */
 #define PROTOCOL_VERSION   39      /* openHPSDR protocol version *10 ([12])  */
 #define SAMPLES_PER_FRAME  238     /* 24-bit I/Q pairs per DDC packet        */
 #define FIFO_WORD          64      /* bytes per instant in the DDR ring: 16 * 4B LE
@@ -309,13 +309,15 @@ void *mic_thread(void *data)
     clock_gettime(CLOCK_MONOTONIC, &delay);
 
     while (1) {
-        if (!running) {
-            usleep(500000);
+        // Idle politely when not streaming or before a client connects, and reset the
+        // absolute timer base each idle tick so we don't fire a backlog burst of frames
+        // on resume (matches the reader/sender idle pattern).
+        if (!running || !have_host) {
+            usleep(1000);
             seqnum = 0;
+            clock_gettime(CLOCK_MONOTONIC, &delay);
             continue;
         }
-
-        if (!have_host) continue;
 
         // update seq number
         p = mic_buffer;

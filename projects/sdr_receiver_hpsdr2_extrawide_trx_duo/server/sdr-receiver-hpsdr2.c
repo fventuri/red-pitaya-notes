@@ -53,6 +53,7 @@
 /* ---- Protocol-2 UDP ports ---- */
 #define PORT_COMMAND       1024    /* discovery/general/command in; reply out */
 #define PORT_DDC_SPECIFIC  1025    /* DDC-specific in; high-priority status out */
+#define PORT_MIC           1026
 #define PORT_HIGH_PRIORITY 1027    /* high-priority in (run + phase words)     */
 #define PORT_DDC_DATA0     1035    /* DDC n I/Q out from source port 1035+n    */
 
@@ -272,6 +273,79 @@ void *status_thread(void *arg)
   return NULL;
 }
 
+//
+// The microphone thread just sends silence, that is
+// a "zeroed" mic frame every 1.333 msec and needs to
+// be sent for some app's timing purposes.
+//
+void *mic_thread(void *data)
+{
+    int sock;
+    unsigned long seqnum = 0; 
+    struct sockaddr_in addr;
+    unsigned char mic_buffer[132];
+    unsigned char *p;
+    int yes = 1; 
+    struct timespec delay;
+    sock = socket(AF_INET, SOCK_DGRAM, 0);
+
+    if (sock < 0) { 
+        perror("***** ERROR: Mic thread: socket");
+        return NULL;
+    }    
+
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void *)&yes, sizeof(yes));
+    setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, (void *)&yes, sizeof(yes));
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port = htons(PORT_MIC);
+
+    if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) { 
+        perror("mic_thread ERROR: bind");
+        close(sock);
+        return NULL;
+    }    
+
+    memset(mic_buffer, 0, 132);
+    clock_gettime(CLOCK_MONOTONIC, &delay);
+
+    while (1) {
+        // Idle politely when not streaming or before a client connects, and reset the
+        // absolute timer base each idle tick so we don't fire a backlog burst of frames
+        // on resume (matches the reader/sender idle pattern).
+        if (!running || !have_host) {
+            usleep(1000);
+            seqnum = 0;
+            clock_gettime(CLOCK_MONOTONIC, &delay);
+            continue;
+        }
+
+        // update seq number
+        p = mic_buffer;
+        *(uint32_t*)p = htonl(seqnum++);
+        p += 4;
+
+        // 64 samples with 48000 kHz, makes 1333333 nsec
+        delay.tv_nsec += 1333333;
+
+        while (delay.tv_nsec >= 1000000000) {
+            delay.tv_nsec -= 1000000000;
+            delay.tv_sec++;
+        }
+
+        clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &delay, NULL);
+
+        if (sendto(sock, mic_buffer, 132, 0, (struct sockaddr * )&host_addr, sizeof(host_addr)) < 0) {
+            perror("***** ERROR: Mic thread sendto");
+            break;
+        }
+    }
+
+    close(sock);
+    return NULL;
+}
+
 /* ---------- discovery reply (from port 1024) ---------- */
 static void send_discovery_reply(struct sockaddr_in *to, socklen_t tolen)
 {
@@ -434,17 +508,19 @@ int main(int argc, char *argv[])
      thread together on core 1. Without isolating the reader, main/status float onto
      core 0 and steal the ~10% headroom needed for 6 DDC x 768 ksps. */
   {
-    pthread_t rtid, stid, sttid;
+    pthread_t rtid, stid, sttid, mtid;
     cpu_set_t cs;
     pthread_create(&rtid,  NULL, reader_thread, NULL);
     pthread_create(&stid,  NULL, sender_thread, NULL);
     pthread_create(&sttid, NULL, status_thread, NULL);
+    pthread_create(&mtid,  NULL, mic_thread, NULL);
     CPU_ZERO(&cs); CPU_SET(0, &cs); pthread_setaffinity_np(rtid, sizeof(cs), &cs);
     CPU_ZERO(&cs); CPU_SET(1, &cs);
     pthread_setaffinity_np(stid,  sizeof(cs), &cs);
     pthread_setaffinity_np(sttid, sizeof(cs), &cs);
+    pthread_setaffinity_np(mtid, sizeof(cs), &cs);
     sched_setaffinity(0, sizeof(cs), &cs);      /* main (command) thread -> core 1 */
-    pthread_detach(rtid); pthread_detach(stid); pthread_detach(sttid);
+    pthread_detach(rtid); pthread_detach(stid); pthread_detach(sttid); pthread_detach(mtid);
   }
 
   clock_gettime(CLOCK_MONOTONIC, &last_cc);
