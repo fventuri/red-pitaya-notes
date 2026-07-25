@@ -1,6 +1,6 @@
 # Create axi_hub
 cell axi_hub hub_0 {
-  CFG_DATA_WIDTH 288
+  CFG_DATA_WIDTH 384
   STS_DATA_WIDTH 32
 } {
   aclk /pll_0/clk_out1
@@ -9,14 +9,14 @@ cell axi_hub hub_0 {
 
 # Create port_slicer
 cell port_slicer slice_0 {
-  DIN_WIDTH 288 DIN_FROM 0 DIN_TO 0
+  DIN_WIDTH 384 DIN_FROM 0 DIN_TO 0
 } {
   din hub_0/cfg_data
 }
 
 # Create port_slicer
 cell port_slicer slice_1 {
-  DIN_WIDTH 288 DIN_FROM 31 DIN_TO 16
+  DIN_WIDTH 384 DIN_FROM 31 DIN_TO 16
 } {
   din hub_0/cfg_data
 }
@@ -25,7 +25,7 @@ for {set i 0} {$i <= 3} {incr i} {
 
   # Create port_slicer
   cell port_slicer slice_[expr $i + 2] {
-    DIN_WIDTH 288 DIN_FROM [expr $i + 8] DIN_TO [expr $i + 8]
+    DIN_WIDTH 384 DIN_FROM [expr $i + 8] DIN_TO [expr $i + 8]
   } {
     din hub_0/cfg_data
   }
@@ -40,7 +40,7 @@ for {set i 0} {$i <= 3} {incr i} {
 
   # Create port_slicer
   cell port_slicer slice_[expr $i + 10] {
-    DIN_WIDTH 288 DIN_FROM [expr 32 * $i + 63] DIN_TO [expr 32 * $i + 32]
+    DIN_WIDTH 384 DIN_FROM [expr 32 * $i + 63] DIN_TO [expr 32 * $i + 32]
   } {
     din hub_0/cfg_data
   }
@@ -283,14 +283,24 @@ cell xilinx.com:ip:axis_dwidth_converter conv_2 {
 
 # Create port_slicer
 cell port_slicer slice_min_addr {
-  DIN_WIDTH 288 DIN_FROM 255 DIN_TO 224
+  DIN_WIDTH 384 DIN_FROM 255 DIN_TO 224
 } {
   din hub_0/cfg_data
 }
 
 # Create port_slicer
 cell port_slicer slice_ring {
-  DIN_WIDTH 288 DIN_FROM 287 DIN_TO 256
+  DIN_WIDTH 384 DIN_FROM 287 DIN_TO 256
+} {
+  din hub_0/cfg_data
+}
+
+# Create port_slicer
+# GPIO open-collector register: cfg byte 44 (bits 359:352) drives the E1
+# expansion P-side pins (exp_p_tri_io) for BCD/filter-board control. The server
+# writes the openHPSDR Protocol-2 High-Priority "Open Collector Outputs" byte here.
+cell port_slicer gpio_slice {
+  DIN_WIDTH 384 DIN_FROM 359 DIN_TO 352
 } {
   din hub_0/cfg_data
 }

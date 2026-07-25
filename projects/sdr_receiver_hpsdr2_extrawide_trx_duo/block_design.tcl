@@ -51,6 +51,13 @@ cell axis_red_pitaya_adc adc_0 {
   adc_csn adc_csn_o
 }
 
+# GPIO
+# The base ports.tcl creates exp_p_tri_io as a bidirectional (IO) port. Redefine
+# it as a pure 8-bit output so the open-collector/filter register inside rx_0
+# (gpio_slice) can drive the E1 expansion P-side pins.
+delete_bd_objs [get_bd_ports exp_p_tri_io]
+create_bd_port -dir O -from 7 -to 0 exp_p_tri_io
+
 # RX 0
 
 module rx_0 {
@@ -58,4 +65,5 @@ module rx_0 {
 } {
   hub_0/S_AXI ps_0/M_AXI_GP0
   writer_0/M_AXI ps_0/S_AXI_ACP
+  gpio_slice/dout exp_p_tri_io
 }

@@ -62,6 +62,7 @@ volatile uint16_t *rx_rate;        /* cfg+2: shared CIC decimation word       */
 volatile uint32_t *rx_freq;        /* cfg+4: rx_freq[NUM_DDC] phase increments */
 volatile uint32_t *rx_min;         /* cfg+36: DDR ring physical base   (min_addr, cfg[319:288]) */
 volatile uint32_t *rx_ring;        /* cfg+40: ring size-1 in 128B bursts       (cfg[351:320]) */
+volatile uint8_t  *rx_gpio;        /* cfg+44: open-collector outputs -> E1 exp_p pins (cfg[359:352]) */
 volatile uint32_t *rx_wptr;        /* sts+0: writer pointer, in 128-byte bursts */
 volatile uint8_t  *dma_ram;        /* mmap of the CMA DDR ring (ACP-coherent)  */
 
@@ -384,12 +385,19 @@ static void process_ddc_specific(const uint8_t *b)
 }
 
 /* ---------- high-priority (port 1027): run bit + per-DDC phase words ---------- */
-static void process_high_priority(const uint8_t *b)
+static void process_high_priority(const uint8_t *b, ssize_t n)
 {
   int ch;
   int newrun = b[4] & 1;
   for(ch = 0; ch < NUM_DDC; ++ch)
     rx_freq[ch] = phaseword_to_pinc(be32(b + 9 + ch * 4));
+
+  /* Open-collector outputs for band/filter (BCD) control: P2 High-Priority byte
+     1401 holds OC1..OC7 (bit1..bit7). Drive OC1-4 onto the E1 expansion pins
+     DIO4_P-DIO7_P exactly as the Protocol-1 transceiver did ((x & 0x1e) << 3),
+     so filter boards wired for P1 keep working under P2. Only apply when the
+     client sent a full-length high-priority packet. */
+  if(n >= 1402) *rx_gpio = (uint8_t)((b[1401] & 0x1e) << 3);
   if(newrun && !running)   /* run-start edge: restart the DMA writer + reset stream/ring state */
   {
     *rx_rst &= ~1; *rx_rst |= 1;        /* re-zero the writer pointer; ring refills from base */
@@ -432,6 +440,7 @@ int main(int argc, char *argv[])
   rx_freq = (uint32_t *)(cfg + 4);
   rx_min  = (uint32_t *)(cfg + 36);
   rx_ring = (uint32_t *)(cfg + 40);
+  rx_gpio = (uint8_t  *)(cfg + 44);
   rx_wptr = (uint32_t *)(sts + 0);
 
   /* stop the writer cleanly on a graceful kill (see on_signal) */
@@ -455,6 +464,7 @@ int main(int argc, char *argv[])
   /* sensible defaults */
   *rx_rate = RATE_BASE / 48;                /* 48 ksps default */
   *rx_sel  = 0;
+  *rx_gpio = 0;                             /* open-collector / filter pins low */
   for(i = 0; i < NUM_DDC; ++i)
     rx_freq[i] = phaseword_to_pinc((uint32_t)floor(600000.0 / HPSDR_DSP_CLOCK * 4294967296.0 + 0.5));
 
@@ -564,7 +574,7 @@ int main(int argc, char *argv[])
       if(FD_ISSET(sock_highprio, &fds))
       {
         n = recvfrom(sock_highprio, buffer, sizeof(buffer), 0, (struct sockaddr *)&from, &fromlen);
-        if(n >= 13) { host_addr = from; have_host = 1; process_high_priority(buffer); }
+        if(n >= 13) { host_addr = from; have_host = 1; process_high_priority(buffer, n); }
       }
     }
 

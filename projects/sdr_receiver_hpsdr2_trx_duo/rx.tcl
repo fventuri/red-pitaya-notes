@@ -257,6 +257,16 @@ cell port_slicer slice_ring {
   din hub_0/cfg_data
 }
 
+# Create port_slicer
+# GPIO open-collector register: cfg byte 44 (bits 359:352) drives the E1
+# expansion P-side pins (exp_p_tri_io) for BCD/filter-board control. The server
+# writes the openHPSDR Protocol-2 High-Priority "Open Collector Outputs" byte here.
+cell port_slicer gpio_slice {
+  DIN_WIDTH 384 DIN_FROM 359 DIN_TO 352
+} {
+  din hub_0/cfg_data
+}
+
 # Create axis_ram_writer
 cell axis_ram_writer writer_0 {
   ADDR_WIDTH 32
