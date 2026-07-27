@@ -1,0 +1,50 @@
+#! /bin/sh
+
+apps_dir=/media/mmcblk0p1/apps
+
+# The ACP/DMA data path hangs if the PL is reprogrammed after the ACP port has been
+# active. Once one of the HPSDR2 receivers has loaded its bitstream this boot, refuse
+# to program the PL again until a reboot. /tmp is tmpfs, so the flag clears on reboot.
+if [ -f /tmp/needs-reboot ]; then
+  echo "ERROR: an ACP/DMA FPGA design was already loaded this boot; reprogramming the" >&2
+  echo "PL now would hang the board. Reboot before starting this receiver." >&2
+  exit 1
+fi
+
+. $apps_dir/stop.sh
+
+# create the reboot guard right before loading the bitstream
+touch /tmp/needs-reboot
+
+cat $apps_dir/sdr_receiver_hpsdr2_narrow_trx_duo/sdr_receiver_hpsdr2_narrow_trx_duo.bit > /dev/xdevcfg
+
+# --- second virtual HPSDR radio ---------------------------------------------------------
+# The FPGA has 16 DDCs but stock HPSDR clients cap the receiver count (linhpsdr 8, Thetis
+# 12). The server presents the DDCs as two 8-DDC radios, one per network interface, so a
+# stock client sees two independent radios (no patched client needed). Create a macvlan
+# interface mvl0 on eth0 with its own locally-administered MAC (eth0's MAC + the LAA bit)
+# for the second radio; its IPv4 is configured by dhcpcd via /etc/dhcpcd.conf (which has an
+# `interface mvl0` stanza mirroring eth0).
+if ! ip link show mvl0 >/dev/null 2>&1; then
+  eth_mac=$(cat /sys/class/net/eth0/address)
+  first=$(printf '%02x' $(( 0x${eth_mac%%:*} | 0x02 )))
+  ip link add mvl0 link eth0 address "$first:${eth_mac#*:}" type macvlan mode bridge
+fi
+# eth0 and mvl0 share one IP subnet; without these a request for one interface's IP could be
+# answered with the other interface's MAC (ARP flux), cross-wiring the two radios.
+echo 1 > /proc/sys/net/ipv4/conf/all/arp_ignore
+echo 2 > /proc/sys/net/ipv4/conf/all/arp_announce
+echo 2 > /proc/sys/net/ipv4/conf/all/rp_filter
+ip link set mvl0 up
+dhcpcd mvl0 2>/dev/null   # apply /etc/dhcpcd.conf (DHCP with static fallback)
+# wait (up to ~8 s) for mvl0 to get an IPv4 so the server can advertise it
+i=0
+while [ $i -lt 40 ]; do
+  ip -4 addr show mvl0 2>/dev/null | grep -q 'inet ' && break
+  sleep 0.2; i=$((i + 1))
+done
+ip -4 addr show mvl0 2>/dev/null | grep -q 'inet ' || \
+  echo "warning: mvl0 has no IPv4 yet; the second radio may be unreachable (check dhcpcd.conf)" >&2
+# ----------------------------------------------------------------------------------------
+
+$apps_dir/sdr_receiver_hpsdr2_narrow_trx_duo/sdr-receiver-hpsdr2 &

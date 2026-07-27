@@ -8,7 +8,8 @@ module axis_ram_writer #
   parameter integer AXI_ADDR_WIDTH = 32,
   parameter integer AXI_DATA_WIDTH = 64,
   parameter integer AXIS_TDATA_WIDTH = 64,
-  parameter integer FIFO_WRITE_DEPTH = 512
+  parameter integer FIFO_WRITE_DEPTH = 512,
+  parameter         MEMORY_TYPE = "block"   // xpm FIFO memory: "block" or "distributed"
 )
 (
   // System signals
@@ -71,7 +72,7 @@ module axis_ram_writer #
     .READ_DATA_WIDTH(AXI_DATA_WIDTH),
     .READ_MODE("fwft"),
     .FIFO_READ_LATENCY(0),
-    .FIFO_MEMORY_TYPE("block"),
+    .FIFO_MEMORY_TYPE(MEMORY_TYPE),
     .USE_ADV_FEATURES("0400"),
     .RD_DATA_COUNT_WIDTH(COUNT_WIDTH)
   ) fifo_0 (
