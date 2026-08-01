@@ -72,9 +72,16 @@ for {set i 0} {$i < $n_ddc} {incr i} {
     din hub_0/cfg_data
   }
 
-  # 0-DSP phase-truncation NCO
+  # 0-DSP phase-truncation NCO.
+  # DITHER FALSE for v0.6.4: phase dithering (dds_phase DITHER=TRUE) is functionally
+  # correct (xsim: cos/sin bit-balanced, spurs -> noise) but its extra logic x16 congested
+  # placement and pushed the clk_out1->clk_out2 NCO->mixer handoff from +102 ps to +5 ps
+  # WNS, which corrupted the odd-cycle (sin/Q) capture on silicon (measured Q std ~4.6x I,
+  # image ~-19 dB). Deferred to v0.6.5 pending a proper timing fix (multicycle/false-path
+  # on the mux-gated cos/sin->A paths, or a compact dither). See REPLY_HENNING + HANDOFF.
   cell dds_phase dds_$i {
     NEGATIVE_SINE TRUE
+    DITHER FALSE
   } {
     pinc freq_slice_$i/dout
     aclk /pll_0/clk_out1
@@ -145,9 +152,15 @@ cell cic_ts_bank125 cic_bank_0 {
 
 # The un-folded CIC runs in the 125 MHz (clk_out1) domain; fir_0 is at 250 MHz. Bridge
 # the low-rate channel-interleaved stream across the boundary (mirror of cc_0 below).
+# IS_ACLK_ASYNC 1: force the ASYNC (gray-code FIFO) converter. When left default, the tool
+# propagates a SYNCHRONOUS 1:2 converter (clk_out1/clk_out2 are integer-related from one
+# PLL) whose sample-cycle sequencing SCRAMBLES + DUPLICATES this 32-channel TDM stream ->
+# the shipped v0.6.3 chipmunk (24 ksps) + mirror. Async is bit-exact identity in xsim
+# (perfect [D0I,D0Q,D1I,...] packing); see docs/HANDOFF_NARROW_CDC_ROOTCAUSE.md.
 cell xilinx.com:ip:axis_clock_converter cc_in {
   TDATA_NUM_BYTES.VALUE_SRC USER
   TDATA_NUM_BYTES 4
+  IS_ACLK_ASYNC 1
 } {
   S_AXIS cic_bank_0/M_AXIS
   s_axis_aclk /pll_0/clk_out1
@@ -225,6 +238,7 @@ cell xilinx.com:ip:fir_compiler fir_1 {
 cell xilinx.com:ip:axis_clock_converter cc_0 {
   TDATA_NUM_BYTES.VALUE_SRC USER
   TDATA_NUM_BYTES 4
+  IS_ACLK_ASYNC 1
 } {
   S_AXIS fir_1/M_AXIS_DATA
   s_axis_aclk /pll_0/clk_out2
