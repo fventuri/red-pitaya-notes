@@ -692,8 +692,13 @@ int main(int argc, char *argv[])
       {
         n = recv_ifindex(sock_cmd, buffer, sizeof(buffer), &from, &ifidx);
         r = radio_by_ifindex(ifidx);
-        if(n >= 5 && r)
+        if(n >= 5 && r && !(buffer[0] == 0xEF && buffer[1] == 0xFE))
         {
+          /* SparkSDR/piHPSDR also broadcast a Protocol-1 (Metis) discovery (starts with the
+             0xEFFE magic) alongside the Protocol-2 one. Its byte[4] is 0x00, which would
+             otherwise be taken as a P2 "general" packet and re-point this radio's stream to
+             the discovery socket's port, freezing an in-progress DDC. Skip any P1 packet
+             (the guard above) on this P2-only receiver. */
           if(buffer[4] == 0x02)          /* discovery: reply as the radio on this interface */
             send_discovery_reply(r, &from);
           else if(buffer[4] == 0x00)     /* general: this radio's C&C source */

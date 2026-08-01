@@ -553,8 +553,13 @@ int main(int argc, char *argv[])
       if(FD_ISSET(sock_cmd, &fds))
       {
         n = recvfrom(sock_cmd, buffer, sizeof(buffer), 0, (struct sockaddr *)&from, &fromlen);
-        if(n >= 5)
+        if(n >= 5 && !(buffer[0] == 0xEF && buffer[1] == 0xFE))
         {
+          /* SparkSDR/piHPSDR also broadcast a Protocol-1 (Metis) discovery (starts with the
+             0xEFFE magic) alongside the Protocol-2 one. Its byte[4] is 0x00, which would
+             otherwise be taken as a P2 "general" packet and re-point this receiver's stream to
+             the discovery socket's port, freezing an in-progress DDC. Skip any P1 packet
+             (the guard above) on this P2-only receiver. */
           if(buffer[4] == 0x02)          /* discovery (from the ephemeral discovery socket) */
           {
             send_discovery_reply(&from, fromlen);
