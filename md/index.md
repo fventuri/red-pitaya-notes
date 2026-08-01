@@ -30,3 +30,8 @@
    1. [Multiband FT8 transceiver](/sdr-transceiver-ft8-122-88/)
    1. [Pulsed NMR system](/pulsed-nmr-122-88/)
    1. [Vector Network Analyzer](/vna-122-88/)
+1. Applications for TRX-duo (openHPSDR Protocol 2):
+   1. [SDR receiver compatible with HPSDR (Protocol 2)](/sdr-receiver-hpsdr2/)
+   1. [Wideband SDR receiver compatible with HPSDR (Protocol 2)](/sdr-receiver-hpsdr2-wide/)
+   1. [Extrawide SDR receiver compatible with HPSDR (Protocol 2)](/sdr-receiver-hpsdr2-extrawide/)
+   1. [Narrowband SDR receiver compatible with HPSDR (Protocol 2)](/sdr-receiver-hpsdr2-narrow/)

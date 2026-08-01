@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="760" height="260" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd">
+ <defs>
+  <marker id="Arrow1L" overflow="visible" markerHeight="5" markerWidth="8.75" orient="auto-start-reverse" refX="4.25">
+   <path transform="scale(.5)" d="m0 0-5 5 17.5-5-17.5-5z" fill="context-stroke" fill-rule="evenodd"/>
+  </marker>
+ </defs>
+ <rect x="30" y="95" width="120" height="60" fill="none" stroke="#000000" stroke-dasharray="3, 3"/>
+ <text x="90" y="112" fill="#000000" font-family="Roboto Condensed" font-size="14px" text-anchor="middle" style="line-height:1.25"><tspan sodipodi:role="line">FPGA</tspan> <tspan sodipodi:role="line">16 DDCs</tspan> <tspan sodipodi:role="line">48 kSPS each</tspan></text>
+ <rect x="200" y="95" width="140" height="60" fill="none" stroke="#000000" stroke-dasharray="3, 3"/>
+ <text x="270" y="112" fill="#000000" font-family="Roboto Condensed" font-size="14px" text-anchor="middle" style="line-height:1.25"><tspan sodipodi:role="line">server</tspan> <tspan sodipodi:role="line">one process,</tspan> <tspan sodipodi:role="line">one DMA ring</tspan></text>
+ <rect x="400" y="40" width="110" height="50" fill="none" stroke="#000000" stroke-dasharray="3, 3"/>
+ <text x="455" y="62" fill="#000000" font-family="Roboto Condensed" font-size="14px" text-anchor="middle" style="line-height:1.25"><tspan sodipodi:role="line">eth0</tspan> <tspan sodipodi:role="line">board IP</tspan></text>
+ <rect x="400" y="170" width="110" height="50" fill="none" stroke="#000000" stroke-dasharray="3, 3"/>
+ <text x="455" y="192" fill="#000000" font-family="Roboto Condensed" font-size="14px" text-anchor="middle" style="line-height:1.25"><tspan sodipodi:role="line">mvl0 (macvlan)</tspan> <tspan sodipodi:role="line">second IP</tspan></text>
+ <rect x="560" y="40" width="180" height="50" fill="#dce6f0" stroke="#000000" stroke-dasharray="3, 3"/>
+ <text x="650" y="62" fill="#000000" font-family="Roboto Condensed" font-size="14px" text-anchor="middle" style="line-height:1.25"><tspan sodipodi:role="line">Radio 0</tspan> <tspan sodipodi:role="line">8 receivers (DDC 0–7)</tspan></text>
+ <rect x="560" y="170" width="180" height="50" fill="#dce6f0" stroke="#000000" stroke-dasharray="3, 3"/>
+ <text x="650" y="192" fill="#000000" font-family="Roboto Condensed" font-size="14px" text-anchor="middle" style="line-height:1.25"><tspan sodipodi:role="line">Radio 1</tspan> <tspan sodipodi:role="line">8 receivers (DDC 8–15)</tspan></text>
+ <path d="m150 125h40" fill="none" marker-end="url(#Arrow1L)" stroke="#000000"/>
+ <path d="m340 115c40 0 20-50 60-50" fill="none" marker-end="url(#Arrow1L)" stroke="#000000"/>
+ <path d="m340 135c40 0 20 60 60 60" fill="none" marker-end="url(#Arrow1L)" stroke="#000000"/>
+ <path d="m510 65h40" fill="none" marker-end="url(#Arrow1L)" stroke="#000000"/>
+ <path d="m510 195h40" fill="none" marker-end="url(#Arrow1L)" stroke="#000000"/>
+ <text x="380" y="248" fill="#000000" font-family="Roboto Condensed" font-size="14px" text-anchor="middle" style="line-height:1.25"><tspan sodipodi:role="line">A stock HPSDR program discovers two independent 8-receiver radios.</tspan></text>
+</svg>
