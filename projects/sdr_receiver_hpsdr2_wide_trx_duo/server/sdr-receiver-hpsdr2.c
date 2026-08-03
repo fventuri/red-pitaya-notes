@@ -512,6 +512,25 @@ int main(int argc, char *argv[])
     { perror("bind data socket"); return EXIT_FAILURE; }
   }
 
+  /* Silence ICMP port-unreachable on the P2 host->radio ports this RX-only receiver
+     does not service: 1028 (speaker/LR audio) and 1029.. (DUC / TX I&Q). Thetis streams
+     these continuously even in pure RX. If the ports are unbound the board's kernel answers
+     each datagram with ICMP port-unreachable; on Windows that latches WSAECONNRESET onto
+     Thetis's shared RX socket and freezes its receive loop (sooner at higher sample rates;
+     piHPSDR on Linux is immune). Bind throwaway sockets (never read) so the datagrams land
+     silently and no ICMP is emitted. */
+  for(i = PORT_HIGH_PRIORITY + 1; i < PORT_DDC_DATA0; ++i)   /* 1028..1034 */
+  {
+    int s = socket(AF_INET, SOCK_DGRAM, 0);
+    setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port = htons(i);
+    if(bind(s, (struct sockaddr *)&addr, sizeof(addr)) < 0)
+      perror("bind sink socket");   /* non-fatal: worst case a stray ICMP */
+  }
+
   /* Give the reader core 0 ALL to itself (the latency-bound volatile FIFO read is
      the throughput limiter); put the sender, status thread and this command/main
      thread together on core 1. Without isolating the reader, main/status float onto

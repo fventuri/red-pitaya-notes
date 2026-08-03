@@ -622,6 +622,16 @@ int main(int argc, char *argv[])
   for(ch = 0; ch < DDC_PER_RADIO; ++ch)
     sock_data[ch] = mk_sock(PORT_DDC_DATA0 + ch);
 
+  /* Silence ICMP port-unreachable on the P2 host->radio ports these RX-only virtual radios
+     do not service: 1028 (speaker/LR audio) and 1029.. (DUC / TX I&Q). Thetis streams these
+     continuously even in pure RX. If the ports are unbound the board's kernel answers each
+     datagram with ICMP port-unreachable; on Windows that latches WSAECONNRESET onto Thetis's
+     shared RX socket and freezes its receive loop (sooner at higher sample rates; piHPSDR on
+     Linux is immune). Bind throwaway sockets (never read) so the datagrams land silently and
+     no ICMP is emitted. One INADDR_ANY bind per port covers both virtual radios' IPs. */
+  for(i = PORT_HIGH_PRIORITY + 1; i < PORT_DDC_DATA0; ++i)   /* 1028..1034 */
+    (void)mk_sock(i);
+
   /* set up each virtual radio: interface index/MAC/IP, DDC window, prebuilt IP_PKTINFO.
      Wait briefly for each interface's IPv4 (mvl0 is configured by dhcpcd after start.sh
      creates the macvlan), so replies carry a valid source address. */
