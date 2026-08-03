@@ -22,13 +22,20 @@ cat $apps_dir/sdr_receiver_hpsdr2_narrow_trx_duo/sdr_receiver_hpsdr2_narrow_trx_
 # The FPGA has 16 DDCs but stock HPSDR clients cap the receiver count (linhpsdr 8, Thetis
 # 12). The server presents the DDCs as two 8-DDC radios, one per network interface, so a
 # stock client sees two independent radios (no patched client needed). Create a macvlan
-# interface mvl0 on eth0 with its own locally-administered MAC (eth0's MAC + the LAA bit)
-# for the second radio; its IPv4 is configured by dhcpcd via /etc/dhcpcd.conf (which has an
-# `interface mvl0` stanza mirroring eth0).
+# interface mvl0 on eth0 with its own MAC for the second radio; its IPv4 is configured by
+# dhcpcd via /etc/dhcpcd.conf (which has an `interface mvl0` stanza mirroring eth0).
 if ! ip link show mvl0 >/dev/null 2>&1; then
   eth_mac=$(cat /sys/class/net/eth0/address)
-  first=$(printf '%02x' $(( 0x${eth_mac%%:*} | 0x02 )))
-  ip link add mvl0 link eth0 address "$first:${eth_mac#*:}" type macvlan mode bridge
+  # Derive mvl0's MAC from eth0's: set the locally-administered bit on octet 1 AND toggle a
+  # bit in octet 5. CW Skimmer Server identifies a radio by only the last three MAC octets,
+  # so differing solely in octet 1 makes the two virtual radios indistinguishable to it.
+  # Toggle (XOR), not OR, so the bit flips regardless of its starting value -- an OR leaves
+  # octet 5 unchanged when eth0 already has that bit set, which would clone eth0's MAC.
+  o1=$(printf '%02x' $(( 0x${eth_mac%%:*} | 0x02 )))
+  o5=$(printf '%02x' $(( 0x$(echo "$eth_mac" | cut -d: -f5) ^ 0x02 )))
+  o234=$(echo "$eth_mac" | cut -d: -f2-4)
+  o6=$(echo "$eth_mac" | cut -d: -f6)
+  ip link add mvl0 link eth0 address "$o1:$o234:$o5:$o6" type macvlan mode bridge
 fi
 # eth0 and mvl0 share one IP subnet; without these a request for one interface's IP could be
 # answered with the other interface's MAC (ARP flux), cross-wiring the two radios.
