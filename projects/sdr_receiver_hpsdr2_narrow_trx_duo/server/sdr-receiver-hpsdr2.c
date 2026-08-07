@@ -100,6 +100,14 @@ volatile uint8_t  *rx_gpio;        /* OFF_GPIO: open-collector outputs -> E1 exp
 volatile uint32_t *rx_wptr;        /* sts+0: writer pointer, in 128-byte bursts */
 volatile uint8_t  *dma_ram;        /* mmap of the CMA DDR ring (ACP-coherent)  */
 
+/* Optional per-DDC startup ADC assignment (NUM_DDC args, one per physical DDC):
+     0 = host chooses this DDC's ADC (default),  1 = force ADC0,  2 = force ADC1.
+   Forced DDCs ignore the host's ddc-specific ADC bit -- for clients that can't select the
+   ADC (CW Skimmer Server, SparkSDR); host-controlled DDCs work as before, so a client that
+   can pick the ADC (linhpsdr, Thetis) still steers the DDCs left at 0. */
+static uint32_t adc_force_mask = 0;   /* bit d set => DDC d's ADC is forced (host bit ignored) */
+static uint32_t adc_force_val  = 0;   /* bit d => forced value ADC1 (only where adc_force_mask set) */
+
 /* ---- shared sockets (one per UDP port; multi-homed via IP_PKTINFO) ---- */
 static int sock_cmd, sock_ddcspec, sock_highprio, sock_mic;
 static int sock_data[DDC_PER_RADIO];
@@ -484,7 +492,14 @@ static void process_ddc_specific(radio_t *r, const uint8_t *b)
     sel_local |= (uint32_t)(adc & 1) << ch;
   }
 
-  *rx_sel = (*rx_sel & ~(rmask << r->ddc_base)) | (sel_local << r->ddc_base);
+  /* Apply the host's ADC bits only to DDCs left host-controlled; DDCs pinned via start.sh
+     (adc_force_mask) keep their fixed ADC. */
+  {
+    uint32_t slice  = rmask << r->ddc_base;                  /* this radio's physical DDC bits */
+    uint32_t host   = (sel_local << r->ddc_base) & ~adc_force_mask;   /* host bits, non-pinned only */
+    uint32_t forced = adc_force_val & adc_force_mask & slice;         /* pinned bits for this radio */
+    *rx_sel = (*rx_sel & ~slice) | forced | host;
+  }
 }
 
 /* ---------- high-priority (port 1027): run bit + per-DDC phase words, per radio ---------- */
@@ -572,7 +587,37 @@ int main(int argc, char *argv[])
   int fd, i, ri, ch;
   volatile void *cfg, *sts;
 
-  (void)argc; (void)argv;
+  /* Optional per-DDC ADC assignment: NUM_DDC args (physical DDC0..15), each:
+       0 = host chooses (default),  1 = force ADC0,  2 = force ADC1.
+     Forced DDCs ignore the host's ddc-specific ADC bit (for clients that can't select the
+     ADC, e.g. CW Skimmer Server / SparkSDR); 0 leaves the DDC host-controlled as before. */
+  if(argc > 1)
+  {
+    if(argc != 1 + NUM_DDC)
+    {
+      fprintf(stderr, "Usage: %s [<adc0> ... <adc%d>]   (%d values, each 0=host/1=ADC0/2=ADC1)\n",
+              argv[0], NUM_DDC - 1, NUM_DDC);
+      return EXIT_FAILURE;
+    }
+    for(i = 0; i < NUM_DDC; ++i)
+    {
+      char *end;
+      long v;
+      errno = 0;
+      v = strtol(argv[i + 1], &end, 10);
+      if(errno != 0 || end == argv[i + 1] || v < 0 || v > 2)
+      {
+        fprintf(stderr, "Usage: %s [<adc0> ... <adc%d>]   (%d values, each 0=host/1=ADC0/2=ADC1)\n",
+                argv[0], NUM_DDC - 1, NUM_DDC);
+        return EXIT_FAILURE;
+      }
+      if(v != 0)                                   /* 1 or 2 -> pin this DDC */
+      {
+        adc_force_mask |= (uint32_t)1 << i;
+        adc_force_val  |= (uint32_t)(v - 1) << i;  /* 1 -> ADC0 (0), 2 -> ADC1 (1) */
+      }
+    }
+  }
 
   if((fd = open("/dev/mem", O_RDWR)) < 0) { perror("open /dev/mem"); return EXIT_FAILURE; }
   cfg = mmap(NULL, sysconf(_SC_PAGESIZE), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0x40000000);
@@ -606,7 +651,7 @@ int main(int argc, char *argv[])
 
   /* sensible defaults: every NCO parked at a distinct nonzero out-of-passband tone so an
      unused/untuned DDC never sits at pinc 0 (see park_pinc) */
-  *rx_sel  = 0;
+  *rx_sel  = adc_force_val & adc_force_mask;   /* pinned DDCs -> their ADC; rest ADC0 until host sets */
   *rx_gpio = 0;
   for(i = 0; i < NUM_DDC; ++i)
     rx_freq[i] = park_pinc(i);

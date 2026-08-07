@@ -18,4 +18,8 @@ touch /tmp/needs-reboot
 
 cat $apps_dir/sdr_receiver_hpsdr2_extrawide_trx_duo/sdr_receiver_hpsdr2_extrawide_trx_duo.bit > /dev/xdevcfg
 
-$apps_dir/sdr_receiver_hpsdr2_extrawide_trx_duo/sdr-receiver-hpsdr2 &
+# Per-DDC ADC assignment (DDC0..3): 0 = host chooses the ADC (e.g. linhpsdr/Thetis ADC
+# checkbox), 1 = force ADC0, 2 = force ADC1. Set 1/2 to pin a DDC for a client that can't
+# select the ADC (CW Skimmer Server, SparkSDR); all 0 = every DDC host-controlled, as before.
+$apps_dir/sdr_receiver_hpsdr2_extrawide_trx_duo/sdr-receiver-hpsdr2 \
+  0 0 0 0 &

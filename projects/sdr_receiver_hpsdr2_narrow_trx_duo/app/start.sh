@@ -54,4 +54,10 @@ ip -4 addr show mvl0 2>/dev/null | grep -q 'inet ' || \
   echo "warning: mvl0 has no IPv4 yet; the second radio may be unreachable (check dhcpcd.conf)" >&2
 # ----------------------------------------------------------------------------------------
 
-$apps_dir/sdr_receiver_hpsdr2_narrow_trx_duo/sdr-receiver-hpsdr2 &
+# Per-DDC ADC assignment for the 16 physical DDCs (radio 0 = DDC0-7, radio 1 = DDC8-15):
+#   0 = host chooses the ADC for this DDC (e.g. linhpsdr/Thetis ADC checkbox)  <- default
+#   1 = force ADC0    2 = force ADC1
+# Set 1/2 to pin a DDC for a client that can't select the ADC (CW Skimmer Server, SparkSDR);
+# leave 0 to let the client choose. All 0 (below) = every DDC host-controlled, as before.
+$apps_dir/sdr_receiver_hpsdr2_narrow_trx_duo/sdr-receiver-hpsdr2 \
+  0 0 0 0 0 0 0 0  0 0 0 0 0 0 0 0 &

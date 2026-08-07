@@ -66,6 +66,14 @@ volatile uint8_t  *rx_gpio;        /* cfg+44: open-collector outputs -> E1 exp_p
 volatile uint32_t *rx_wptr;        /* sts+0: writer pointer, in 128-byte bursts */
 volatile uint8_t  *dma_ram;        /* mmap of the CMA DDR ring (ACP-coherent)  */
 
+/* Optional per-DDC startup ADC assignment (NUM_DDC args, one per DDC):
+     0 = host chooses this DDC's ADC (default),  1 = force ADC0,  2 = force ADC1.
+   Forced DDCs ignore the host's ddc-specific ADC bit -- for clients that can't select the
+   ADC (CW Skimmer Server, SparkSDR); host-controlled DDCs work as before, so a client that
+   can pick the ADC (linhpsdr, Thetis) still steers the DDCs left at 0. */
+static uint32_t adc_force_mask = 0;   /* bit d set => DDC d's ADC is forced (host bit ignored) */
+static uint32_t adc_force_val  = 0;   /* bit d => forced value ADC1 (only where adc_force_mask set) */
+
 /* ---- sockets ---- */
 static int sock_cmd, sock_ddcspec, sock_highprio;
 static int sock_data[NUM_DDC];
@@ -380,7 +388,8 @@ static void process_ddc_specific(const uint8_t *b)
     if(rate_khz > 0) rate = (uint16_t)(RATE_BASE / rate_khz);  /* shared: last enabled wins */
   }
 
-  *rx_sel  = sel;
+  /* apply host ADC bits only to host-controlled DDCs; pinned DDCs (adc_force_mask) keep their ADC */
+  *rx_sel  = (uint8_t)((sel & ~adc_force_mask) | (adc_force_val & adc_force_mask));
   *rx_rate = rate;               /* 48k->1000, 96k->500, 192k->250 (384k->125, Phase 3) */
 }
 
@@ -429,6 +438,38 @@ int main(int argc, char *argv[])
   struct sockaddr_in addr;
   pthread_t tid;
 
+  /* Optional per-DDC ADC assignment: NUM_DDC args, each:
+       0 = host chooses (default),  1 = force ADC0,  2 = force ADC1.
+     Forced DDCs ignore the host's ddc-specific ADC bit (for clients that can't select the
+     ADC, e.g. CW Skimmer Server / SparkSDR); 0 leaves the DDC host-controlled as before. */
+  if(argc > 1)
+  {
+    if(argc != 1 + NUM_DDC)
+    {
+      fprintf(stderr, "Usage: %s [<adc0> ... <adc%d>]   (%d values, each 0=host/1=ADC0/2=ADC1)\n",
+              argv[0], NUM_DDC - 1, NUM_DDC);
+      return EXIT_FAILURE;
+    }
+    for(i = 0; i < NUM_DDC; ++i)
+    {
+      char *end;
+      long v;
+      errno = 0;
+      v = strtol(argv[i + 1], &end, 10);
+      if(errno != 0 || end == argv[i + 1] || v < 0 || v > 2)
+      {
+        fprintf(stderr, "Usage: %s [<adc0> ... <adc%d>]   (%d values, each 0=host/1=ADC0/2=ADC1)\n",
+                argv[0], NUM_DDC - 1, NUM_DDC);
+        return EXIT_FAILURE;
+      }
+      if(v != 0)                                   /* 1 or 2 -> pin this DDC */
+      {
+        adc_force_mask |= (uint32_t)1 << i;
+        adc_force_val  |= (uint32_t)(v - 1) << i;  /* 1 -> ADC0 (0), 2 -> ADC1 (1) */
+      }
+    }
+  }
+
   if((fd = open("/dev/mem", O_RDWR)) < 0) { perror("open /dev/mem"); return EXIT_FAILURE; }
   cfg = mmap(NULL, sysconf(_SC_PAGESIZE), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0x40000000);
   sts = mmap(NULL, sysconf(_SC_PAGESIZE), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0x41000000);
@@ -463,7 +504,7 @@ int main(int argc, char *argv[])
 
   /* sensible defaults */
   *rx_rate = RATE_BASE / 48;                /* 48 ksps default */
-  *rx_sel  = 0;
+  *rx_sel  = adc_force_val & adc_force_mask;   /* pinned DDCs -> their ADC; rest ADC0 until host sets */
   *rx_gpio = 0;                             /* open-collector / filter pins low */
   for(i = 0; i < NUM_DDC; ++i)
     rx_freq[i] = phaseword_to_pinc((uint32_t)floor(600000.0 / HPSDR_DSP_CLOCK * 4294967296.0 + 0.5));
