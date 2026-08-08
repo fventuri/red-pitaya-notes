@@ -57,6 +57,28 @@
 #define PORT_HIGH_PRIORITY 1027    /* high-priority in (run + phase words)     */
 #define PORT_DDC_DATA0     1035    /* DDC n I/Q out from source port 1035+n    */
 
+/* ---- Protocol-2 wideband (WB) display: raw ADC0 samples OUT ----
+   The radio sends the full-rate ADC panorama to the host from UDP SOURCE port 1027
+   (linhpsdr WIDE_BAND_TO_HOST_PORT); the host enables it via General-packet byte[23]&1.
+   We reuse sock_highprio (already bound to 1027) as the egress socket so the source
+   port is 1027. linhpsdr wants 512 samples/packet, 16-bit big-endian signed, i.e.
+   4-byte BE seq header + 1024-byte payload = 1028-byte datagram; it accumulates a
+   16384-sample FFT window at ~10 fps (32 packets/window).
+   M2 (this build): the payload is a REAL raw-ADC0 snapshot. On each frame the server
+   pulses the WB-arm cfg bit; the FPGA (cores/wb_capture.v) captures WB_BUFFER samples
+   into a 32-bit x WB_WORDS dual-port BRAM (two samples/word), which the server reads
+   through the axi_hub b00 window at WB_BRAM_BASE and repacks big-endian. Set
+   WB_SYNTHETIC 1 to fall back to the M0 two-tone generator (transport-only debug). */
+#define WB_SYNTHETIC       0       /* 1 = M0 two-tone generator; 0 = real ADC snapshot */
+#define WB_SAMPLES_PER_PKT 512     /* samples per WB datagram (linhpsdr fixed)       */
+#define WB_PACKETS         32      /* per 100 ms: 512*32 = 16384 = one FFT window    */
+#define WB_BUFFER          (WB_SAMPLES_PER_PKT * WB_PACKETS)  /* 16384 = FFT window  */
+#define WB_WORDS           (WB_BUFFER / 2)                    /* 8192 packed 32b words */
+#define WB_PERIOD_US       100000  /* 10 fps                                         */
+#define WB_PKT_BYTES       (4 + WB_SAMPLES_PER_PKT * 2)   /* 1028                    */
+#define WB_BRAM_BASE       0x42000000  /* axi_hub b00 BRAM slot (snapshot readout)   */
+#define WB_CAPTURE_US      1000    /* wait after arm for the 131 us snapshot to freeze */
+
 /* ---- FPGA register windows ---- */
 volatile uint8_t  *rx_rst;         /* cfg+0 bit0: writer/stream reset (active low) */
 volatile uint8_t  *rx_sel;         /* cfg+1: per-DDC ADC select bitmap        */
@@ -65,8 +87,10 @@ volatile uint32_t *rx_freq;        /* cfg+4: rx_freq[NUM_DDC] phase increments *
 volatile uint32_t *rx_min;         /* cfg+28: DDR ring physical base   (min_addr, cfg[255:224]) */
 volatile uint32_t *rx_ring;        /* cfg+32: ring size-1 in 128B bursts       (cfg[287:256]) */
 volatile uint8_t  *rx_gpio;        /* cfg+44: open-collector outputs -> E1 exp_p pins (cfg[359:352]) */
+volatile uint8_t  *rx_wb;          /* cfg+45 bit0: WB-arm (rising edge starts a snapshot, cfg[360]) */
 volatile uint32_t *rx_wptr;        /* sts+0: writer pointer, in 128-byte bursts */
 volatile uint8_t  *dma_ram;        /* mmap of the CMA DDR ring (ACP-coherent)  */
+volatile uint32_t *wb_bram;        /* mmap of the WB snapshot BRAM (hub b00 @ WB_BRAM_BASE) */
 
 /* Optional per-DDC startup ADC assignment (NUM_DDC args, one per DDC):
      0 = host chooses this DDC's ADC (default),  1 = force ADC0,  2 = force ADC1.
@@ -91,6 +115,18 @@ static struct timespec last_cc;
 static uint32_t seq_ddc[NUM_DDC];
 static uint64_t ts_ddc[NUM_DDC];
 static uint32_t seq_status = 0;
+
+/* ---- wideband (WB) state ---- */
+static volatile int wb_enable = 0;        /* General byte[23]&1 -> enable ADC0 WB        */
+static volatile int wb_ppf = WB_PACKETS;  /* packets per frame (General byte[28]); Thetis
+                                             defaults 32, linhpsdr leaves 0 -> WB_PACKETS.
+                                             The WB sequence number MUST restart at 0 each
+                                             frame and run 0..wb_ppf-1: Thetis's WB receiver
+                                             is a per-frame state machine keyed on that
+                                             (network.c), while linhpsdr ignores the seq. */
+static volatile int wb_rate_ms = WB_PERIOD_US / 1000;  /* inter-frame period (General byte[27],
+                                             update rate in ms); Thetis defaults 70, linhpsdr
+                                             leaves 0 -> our default. Clamped to [10,1000]. */
 
 /* Convert a client phase word (computed for 122.88 MHz) to the RP NCO phase
    increment at 125 MHz.  Without this the radio tunes ~1.7% high. */
@@ -282,6 +318,85 @@ void *status_thread(void *arg)
   return NULL;
 }
 
+/* Fill buf[WB_BUFFER] with one FFT window of int16 samples.
+   WB_SYNTHETIC: two phase-continuous tones at fs/8 (15.625 MHz) and fs/4 (31.25 MHz),
+   landing on exact bins 2048/4096 of linhpsdr's 16384-pt window -> two clean peaks at
+   1/4 and 1/2 of the 0-62.5 MHz span (transport-only debug).
+   Otherwise: arm the FPGA snapshot, wait for the 131 us capture to freeze, then read
+   WB_WORDS packed 32-bit words from the BRAM (low half = first/even sample, high half =
+   second/odd sample, both signed 16-bit). */
+static void wb_fill_window(int16_t *buf)
+{
+#if WB_SYNTHETIC
+  static uint64_t wb_n = 0;
+  const double w1 = 2.0 * M_PI / 8.0, w2 = 2.0 * M_PI / 4.0;
+  int i;
+  for(i = 0; i < WB_BUFFER; ++i)
+  {
+    double t = (double)(wb_n++);
+    long v = lround(8000.0 * sin(w1 * t) + 6000.0 * sin(w2 * t));
+    if(v > 32767) v = 32767; else if(v < -32768) v = -32768;
+    buf[i] = (int16_t)v;
+  }
+#else
+  int i;
+  *rx_wb = 1;                 /* rising edge -> FPGA captures WB_BUFFER samples (~131 us) */
+  usleep(WB_CAPTURE_US);      /* wait for the snapshot to complete and freeze            */
+  for(i = 0; i < WB_WORDS; ++i)
+  {
+    uint32_t w = wb_bram[i];
+    buf[2 * i]     = (int16_t)(w & 0xffff);          /* even (first) sample  */
+    buf[2 * i + 1] = (int16_t)((w >> 16) & 0xffff);  /* odd  (second) sample */
+  }
+  *rx_wb = 0;                 /* lower arm to re-ready the gate for the next snapshot */
+#endif
+}
+
+/* ---------- wideband (WB) sender to the host (source port 1027), ~10 fps ----------
+   Emits one frame of `ppf` datagrams (WB_SAMPLES_PER_PKT samples each) per WB_PERIOD_US,
+   only while a host is present and has enabled WB (General byte[23]&1). Each sample is
+   16-bit big-endian; egress is from sock_highprio (bound to 1027) so the UDP source port
+   is 1027. The datagram sequence number RESTARTS AT 0 each frame and runs 0..ppf-1 --
+   Thetis's WB receiver is a per-frame state machine that waits for seq 0 then expects
+   1..ppf-1 (ChannelMaster/network.c); linhpsdr ignores the seq and just concatenates, so
+   per-frame numbering satisfies both. `ppf` (<= WB_PACKETS) comes from General byte[28];
+   at ppf < WB_PACKETS we send the first ppf*512 samples of the 16384-sample capture. */
+void *wb_thread(void *arg)
+{
+  static int16_t win[WB_BUFFER];
+  uint8_t pkt[WB_PKT_BYTES];
+  int p, k, idx;
+  (void)arg;
+
+  while(1)
+  {
+    if(!have_host || !wb_enable) { usleep(2000); continue; }
+
+    int ppf = wb_ppf;                        /* snapshot the frame size for this frame */
+    if(ppf < 1 || ppf > WB_PACKETS) ppf = WB_PACKETS;
+    wb_fill_window(win);
+    idx = 0;
+    for(p = 0; p < ppf; ++p)
+    {
+      uint32_t s = (uint32_t)p;              /* per-frame sequence 0..ppf-1 */
+      uint8_t *dp = pkt + 4;
+      pkt[0] = s >> 24; pkt[1] = s >> 16; pkt[2] = s >> 8; pkt[3] = s;
+      for(k = 0; k < WB_SAMPLES_PER_PKT; ++k)
+      {
+        int16_t v = win[idx++];
+        dp[0] = (uint8_t)((v >> 8) & 0xff);   /* 16-bit big-endian signed */
+        dp[1] = (uint8_t)(v & 0xff);
+        dp += 2;
+      }
+      sendto(sock_highprio, pkt, sizeof(pkt), 0,
+             (struct sockaddr *)&host_addr, sizeof(host_addr));
+    }
+    usleep(wb_rate_ms * 1000);   /* honor the host's WB update rate (General byte[27]) */
+  }
+  return NULL;
+}
+
+//
 //
 // The microphone thread just sends silence, that is
 // a "zeroed" mic frame every 1.333 msec and needs to
@@ -476,6 +591,10 @@ int main(int argc, char *argv[])
   if((fd = open("/dev/mem", O_RDWR)) < 0) { perror("open /dev/mem"); return EXIT_FAILURE; }
   cfg = mmap(NULL, sysconf(_SC_PAGESIZE), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0x40000000);
   sts = mmap(NULL, sysconf(_SC_PAGESIZE), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0x41000000);
+  /* WB snapshot BRAM (axi_hub b00): WB_WORDS * 4 = 32 KiB, page-rounded */
+  wb_bram = (uint32_t *)mmap(NULL, (WB_WORDS * 4 + sysconf(_SC_PAGESIZE) - 1)
+                             & ~(sysconf(_SC_PAGESIZE) - 1),
+                             PROT_READ | PROT_WRITE, MAP_SHARED, fd, WB_BRAM_BASE);
   close(fd);
 
   rx_rst  = (uint8_t  *)(cfg + 0);
@@ -485,6 +604,7 @@ int main(int argc, char *argv[])
   rx_min  = (uint32_t *)(cfg + 28);
   rx_ring = (uint32_t *)(cfg + 32);
   rx_gpio = (uint8_t  *)(cfg + 44);
+  rx_wb   = (uint8_t  *)(cfg + 45);
   rx_wptr = (uint32_t *)(sts + 0);
 
   /* stop the writer cleanly on a graceful kill (see on_signal) */
@@ -509,6 +629,7 @@ int main(int argc, char *argv[])
   *rx_rate = RATE_BASE / 48;                /* 48 ksps default */
   *rx_sel  = adc_force_val & adc_force_mask;   /* pinned DDCs -> their ADC; rest ADC0 until host sets */
   *rx_gpio = 0;                             /* open-collector / filter pins low */
+  *rx_wb   = 0;                             /* WB-arm low (gate idle until wb_thread pulses) */
   for(i = 0; i < NUM_DDC; ++i)
     rx_freq[i] = phaseword_to_pinc((uint32_t)floor(600000.0 / HPSDR_DSP_CLOCK * 4294967296.0 + 0.5));
 
@@ -579,19 +700,22 @@ int main(int argc, char *argv[])
      thread together on core 1. Without isolating the reader, main/status float onto
      core 0 and steal the ~10% headroom needed for 6 DDC x 768 ksps. */
   {
-    pthread_t rtid, stid, sttid, mtid;
+    pthread_t rtid, stid, sttid, mtid, wtid;
     cpu_set_t cs;
     pthread_create(&rtid,  NULL, reader_thread, NULL);
     pthread_create(&stid,  NULL, sender_thread, NULL);
     pthread_create(&sttid, NULL, status_thread, NULL);
     pthread_create(&mtid,  NULL, mic_thread, NULL);
+    pthread_create(&wtid,  NULL, wb_thread, NULL);
     CPU_ZERO(&cs); CPU_SET(0, &cs); pthread_setaffinity_np(rtid, sizeof(cs), &cs);
     CPU_ZERO(&cs); CPU_SET(1, &cs);
     pthread_setaffinity_np(stid,  sizeof(cs), &cs);
     pthread_setaffinity_np(sttid, sizeof(cs), &cs);
     pthread_setaffinity_np(mtid, sizeof(cs), &cs);
+    pthread_setaffinity_np(wtid, sizeof(cs), &cs);
     sched_setaffinity(0, sizeof(cs), &cs);      /* main (command) thread -> core 1 */
     pthread_detach(rtid); pthread_detach(stid); pthread_detach(sttid); pthread_detach(mtid);
+    pthread_detach(wtid);
   }
 
   clock_gettime(CLOCK_MONOTONIC, &last_cc);
@@ -631,6 +755,19 @@ int main(int argc, char *argv[])
           {
             host_addr = from; have_host = 1;
             clock_gettime(CLOCK_MONOTONIC, &last_cc);
+            /* byte[23] bit0 = enable wideband display for ADC0 (see wb_thread).
+               Thetis also sets byte[24:25]=samples/packet (512), [26]=sample size (16),
+               [27]=update rate ms, [28]=packets/frame (32); linhpsdr leaves 24..28 = 0.
+               We honor packets/frame (clamped to our fixed 512-sample, 16384-capture
+               geometry) and update rate; out-of-range/zero falls back to our defaults. */
+            if(n >= 24) wb_enable = buffer[23] & 1;
+            if(n >= 29)
+            {
+              int ppf = buffer[28];
+              int ur  = buffer[27];
+              wb_ppf     = (ppf >= 1 && ppf <= WB_PACKETS) ? ppf : WB_PACKETS;
+              wb_rate_ms = (ur >= 10 && ur <= 1000) ? ur : (WB_PERIOD_US / 1000);
+            }
           }
         }
       }

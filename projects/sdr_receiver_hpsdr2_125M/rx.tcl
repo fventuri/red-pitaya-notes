@@ -281,3 +281,59 @@ cell axis_ram_writer writer_0 {
   aclk /pll_0/clk_out1
   aresetn slice_0/dout
 }
+
+# ---- Protocol-2 wideband (WB) snapshot capture (M1) ----
+# Tap raw ADC0 and, on a rising edge of the WB-arm cfg bit (byte 45 bit0 = cfg[360]),
+# capture 16384 consecutive full-rate samples into a 32-bit x 8192 dual-port BRAM
+# (two 16-bit samples per word). The CPU reads the frozen snapshot through the axi_hub
+# b00 BRAM port -> slot 2 -> 0x42000000. Fully independent of the DDC/ACP datapath:
+# no DSP, ~8 BRAM tiles, a tiny FSM. See cores/wb_capture.v and docs/PLAN_WIDEBAND_P2.md.
+
+# raw ADC0 = ADC channel A = m_axis_tdata[15:0]
+cell port_slicer wb_adc {
+  DIN_WIDTH 32 DIN_FROM 15 DIN_TO 0
+} {
+  din /adc_0/m_axis_tdata
+}
+
+# WB arm = cfg byte 45 bit0 (cfg[360]); server pulses it low->high per snapshot
+cell port_slicer wb_arm_slice {
+  DIN_WIDTH 384 DIN_FROM 360 DIN_TO 360
+} {
+  din hub_0/cfg_data
+}
+
+# snapshot gate: 16384 samples -> 8192 packed 32-bit words on each arm rising edge
+cell wb_capture wb_cap_0 {} {
+  aclk /pll_0/clk_out1
+  aresetn /rst_0/peripheral_aresetn
+  arm wb_arm_slice/dout
+  adc wb_adc/dout
+}
+
+# 32-bit x 8192 true dual-port snapshot buffer; port A -> CPU via hub, port B <- writer
+cell xilinx.com:ip:blk_mem_gen wb_bram {
+  MEMORY_TYPE True_Dual_Port_RAM
+  USE_BRAM_BLOCK Stand_Alone
+  USE_BYTE_WRITE_ENABLE true
+  BYTE_SIZE 8
+  WRITE_WIDTH_A 32
+  WRITE_DEPTH_A 8192
+  REGISTER_PORTA_OUTPUT_OF_MEMORY_PRIMITIVES false
+  REGISTER_PORTB_OUTPUT_OF_MEMORY_PRIMITIVES false
+} {
+  BRAM_PORTA hub_0/B00_BRAM
+}
+
+# write the packed snapshot words into port B of the BRAM
+cell axis_bram_writer wb_writer {
+  AXIS_TDATA_WIDTH 32
+  BRAM_DATA_WIDTH 32
+  BRAM_ADDR_WIDTH 13
+} {
+  s_axis_tdata wb_cap_0/m_axis_tdata
+  s_axis_tvalid wb_cap_0/m_axis_tvalid
+  b_bram wb_bram/BRAM_PORTB
+  aclk /pll_0/clk_out1
+  aresetn /rst_0/peripheral_aresetn
+}
