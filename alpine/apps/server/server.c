@@ -284,11 +284,11 @@ int main(int argc, char *argv[])
     detach(path);
     if(top && id == 7 && freq == 122)
     {
-      memcpy(path + 21 + i - 4, "/index_122_88.html", 19);
+      memcpy(path + 21 + i - 4, "/index_122M88.html", 19);
     }
     else if(top && id == 2 && freq == 125)
     {
-      memcpy(path + 21 + i - 4, "/index_trx_duo.html", 20);
+      memcpy(path + 21 + i - 4, "/index_125M.html", 17);
     }
     else
     {

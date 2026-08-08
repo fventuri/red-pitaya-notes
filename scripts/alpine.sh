@@ -61,12 +61,14 @@ cp -r alpine/apps $root_dir/media/mmcblk0p1/
 
 projects="common_tools led_blinker mcpha playground pulsed_nmr sdr_receiver sdr_receiver_hpsdr sdr_receiver_wide sdr_transceiver sdr_transceiver_ft8 sdr_transceiver_hpsdr sdr_transceiver_wide sdr_transceiver_wspr vna"
 
-projects_122_88="led_blinker_122_88 pulsed_nmr_122_88 sdr_receiver_122_88 sdr_receiver_hpsdr_122_88 sdr_receiver_wide_122_88 sdr_transceiver_122_88 sdr_transceiver_ft8_122_88 sdr_transceiver_hpsdr_122_88 sdr_transceiver_wspr_122_88 vna_122_88"
+projects_122M88="led_blinker_122M88 pulsed_nmr_122M88 sdr_receiver_122M88 sdr_receiver_hpsdr_122M88 sdr_receiver_wide_122M88 sdr_transceiver_122M88 sdr_transceiver_ft8_122M88 sdr_transceiver_hpsdr_122M88 sdr_transceiver_wspr_122M88 vna_122M88"
 
-projects_trx_duo="common_tools led_blinker mcpha_trx_duo playground pulsed_nmr_trx_duo sdr_receiver_trx_duo sdr_receiver_hpsdr_trx_duo sdr_receiver_hpsdr2_trx_duo sdr_receiver_hpsdr2_narrow_trx_duo sdr_receiver_hpsdr2_wide_trx_duo sdr_receiver_hpsdr2_extrawide_trx_duo sdr_receiver_wide_trx_duo sdr_transceiver_trx_duo sdr_transceiver_ft8_trx_duo sdr_transceiver_hpsdr_trx_duo sdr_transceiver_wide_trx_duo sdr_transceiver_wspr_trx_duo vna_trx_duo"
+projects_125M="common_tools led_blinker mcpha_125M playground pulsed_nmr_125M sdr_receiver_125M sdr_receiver_hpsdr_125M sdr_receiver_hpsdr2_125M sdr_receiver_hpsdr2_narrow_125M sdr_receiver_hpsdr2_wide_125M sdr_receiver_hpsdr2_extrawide_125M sdr_receiver_wide_125M sdr_transceiver_125M sdr_transceiver_ft8_125M sdr_transceiver_hpsdr_125M sdr_transceiver_wide_125M sdr_transceiver_wspr_125M vna_125M"
 
-#for p in $projects $projects_122_88
-for p in $projects_trx_duo
+#for p in $projects $projects_122M88
+# combined image: ship both the 125M (Zynq 7010) and 122M88 (Zynq 7020) app sets;
+# the top-level apps/server picks the right index.html at runtime from the Zynq id + hw_rev freq
+for p in $projects_125M $projects_122M88
 do
   mkdir -p $root_dir/media/mmcblk0p1/apps/$p
   cp -r projects/$p/server/* $root_dir/media/mmcblk0p1/apps/$p/
@@ -168,8 +170,8 @@ tar -zxf \$wsprd_tar --strip-components=1 --directory=\$wsprd_dir
 rm \$wsprd_tar
 make -C \$wsprd_dir
 
-#for p in server $projects $projects_122_88
-for p in server $projects_trx_duo
+#for p in server $projects $projects_122M88
+for p in server $projects_125M $projects_122M88
 do
   make -C /media/mmcblk0p1/apps/\$p clean
   make -C /media/mmcblk0p1/apps/\$p

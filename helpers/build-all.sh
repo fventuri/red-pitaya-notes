@@ -8,11 +8,14 @@ make NAME=led_blinker all
 #
 #printf "%s\n" $PRJS | xargs -n 1 -P $JOBS -I {} make NAME={} bit
 #
-#PRJS="led_blinker_122_88 sdr_receiver_122_88 sdr_receiver_hpsdr_122_88 sdr_receiver_wide_122_88 sdr_transceiver_122_88 sdr_transceiver_ft8_122_88 sdr_transceiver_hpsdr_122_88 sdr_transceiver_wspr_122_88 pulsed_nmr_122_88 vna_122_88"
-#
-#printf "%s\n" $PRJS | xargs -n 1 -P $JOBS -I {} make NAME={} PART=xc7z020clg400-1 bit
+# 122M88 app set builds for the Zynq 7020 (SDRlab-style 122.88 MHz board)
+PRJS="led_blinker_122M88 sdr_receiver_122M88 sdr_receiver_hpsdr_122M88 sdr_receiver_wide_122M88 sdr_transceiver_122M88 sdr_transceiver_ft8_122M88 sdr_transceiver_hpsdr_122M88 sdr_transceiver_wspr_122M88 pulsed_nmr_122M88 vna_122M88"
 
-PRJS="mcpha_trx_duo playground pulsed_nmr_trx_duo sdr_receiver_trx_duo sdr_receiver_hpsdr_trx_duo sdr_receiver_hpsdr2_trx_duo sdr_receiver_wide_trx_duo sdr_transceiver_trx_duo sdr_transceiver_ft8_trx_duo sdr_transceiver_hpsdr_trx_duo sdr_transceiver_wide_trx_duo sdr_transceiver_wspr_trx_duo vna_trx_duo"
+printf "%s\n" $PRJS | xargs -n 1 -P $JOBS -I {} make NAME={} PART=xc7z020clg400-1 bit
+
+# 125M app set builds for the Zynq 7010 (STEMlab-style 125 MHz board = original TRX-duo)
+# all 16 _125M projects (formerly _trx_duo), incl. the four hpsdr2 receivers, plus playground
+PRJS="mcpha_125M playground pulsed_nmr_125M scanner_125M sdr_receiver_125M sdr_receiver_hpsdr_125M sdr_receiver_hpsdr2_125M sdr_receiver_hpsdr2_narrow_125M sdr_receiver_hpsdr2_wide_125M sdr_receiver_hpsdr2_extrawide_125M sdr_receiver_wide_125M sdr_transceiver_125M sdr_transceiver_ft8_125M sdr_transceiver_hpsdr_125M sdr_transceiver_wide_125M sdr_transceiver_wspr_125M vna_125M"
 
 printf "%s\n" $PRJS | xargs -n 1 -P $JOBS -I {} make NAME={} PART=xc7z010clg400-1 bit
 

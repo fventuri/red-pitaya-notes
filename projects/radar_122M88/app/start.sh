@@ -1,0 +1,9 @@
+#! /bin/sh
+
+apps_dir=/media/mmcblk0p1/apps
+
+. $apps_dir/stop.sh
+
+cat $apps_dir/radar_122M88/radar_122M88.bit > /dev/xdevcfg
+
+$apps_dir/radar_122M88/radar &
