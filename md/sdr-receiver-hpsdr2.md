@@ -26,6 +26,16 @@ The [projects/sdr_receiver_hpsdr2_trx_duo](https://github.com/fventuri/red-pitay
 
 The [server](https://github.com/fventuri/red-pitaya-notes/tree/hpsdr2/projects/sdr_receiver_hpsdr2_trx_duo/server) directory contains the source code of the UDP server ([sdr-receiver-hpsdr2.c](https://github.com/fventuri/red-pitaya-notes/blob/hpsdr2/projects/sdr_receiver_hpsdr2_trx_duo/server/sdr-receiver-hpsdr2.c)) that receives control commands and transmits the I/Q data streams to the SDR programs.
 
+## Wideband display
+
+In addition to the eight narrow-band DDC receivers, this version implements the openHPSDR Protocol 2 **wideband display** for **ADC0** — the full 0 Hz – 62.5 MHz panorama shown in the "wideband" panadapter / waterfall window of the SDR program.
+
+Instead of continuously streaming the raw 125 MSPS ADC data, the FPGA periodically captures a **snapshot of 16384 consecutive raw ADC0 samples** into an on-chip block RAM (a small custom `wb_capture` core feeding a dual-port BRAM — the bottom row of the diagram above). The server reads each snapshot and sends it to the host from **UDP source port 1027** as 512-sample, 16-bit big-endian datagrams (32 packets per frame). The SDR program turns the display on and selects the update rate and frame size through the Protocol 2 General packet (wideband-enable, packets-per-frame and update-rate fields).
+
+The wideband capture path is independent of the DDC data path and uses no DSP blocks, so it does not affect the I/Q streams. It currently covers **ADC0** only.
+
+To view it, open the *Wideband* (ADC0) window in **linhpsdr**, or enable the 0–60 MHz wideband / panadapter display in **Thetis**.
+
 ## Software
 
 This receiver is known to work with the following programs that support the openHPSDR Ethernet Protocol 2:
