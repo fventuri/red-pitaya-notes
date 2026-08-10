@@ -585,17 +585,12 @@ static void process_ddc_specific(const uint8_t *b, ssize_t n)
 
   /* apply host ADC bits only to host-controlled DDCs; pinned DDCs (adc_force_mask) keep their ADC */
   *rx_sel  = (uint8_t)((sel & ~adc_force_mask) | (adc_force_val & adc_force_mask));
-  *rx_rate = rate;               /* 48k->1000, 96k->500, 192k->250 (384k->125, Phase 3) */
-
   /* Diversity is active when a DDC is synced to DDC0 and DDC0 itself is enabled: DDC0's
      stream then carries the interleaved (DDC0,partner) pair (see build_div_packet). */
   if(sync & ~1u)                                        /* some DDC (>0) synced to DDC0 */
-  {
-    for(ch = 1; ch < NUM_DDC; ++ch) if(sync & (1u << ch)) { diversity_partner = ch; break; }
-    diversity_active = (ddc_enable & 1u) ? 1 : 0;
-  }
-  else
-    diversity_active = 0;
+    for(ch = 1; ch < NUM_DDC; ++ch) { if(sync & (1u << ch)) { diversity_partner = ch; break; } }
+  diversity_active = (sync & ~1u) && (ddc_enable & 1u);
+  *rx_rate = rate;               /* 48k->1000, 96k->500, 192k->250 (384k->125, Phase 3) */
 }
 
 /* ---------- high-priority (port 1027): run bit + per-DDC phase words ---------- */
