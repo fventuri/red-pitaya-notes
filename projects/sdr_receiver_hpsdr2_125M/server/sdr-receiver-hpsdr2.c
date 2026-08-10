@@ -114,6 +114,17 @@ static uint32_t seq_ddc[NUM_DDC];
 static uint64_t ts_ddc[NUM_DDC];
 static uint32_t seq_status = 0;
 
+/* ---- Diversity (synced DDC pair) state ----
+   piHPSDR/Thetis request diversity by enabling ONLY DDC0 (byte 7 = 0x01), pointing DDC1
+   at ADC1 (byte 23 = 1), and setting the P2 sync register (DDC-specific byte 1363 bit n =
+   "sync DDC n to DDC0"). The radio must then fold the synced DDC's I/Q into DDC0's stream,
+   interleaved as (DDC0 I,Q)(DDC1 I,Q)... The FPGA already computes every DDC every cycle
+   (both ADCs sit in each ring instant), so this is done entirely here: we honor the synced
+   DDC's ADC assignment (below) and emit DDC0 as the interleaved DIV stream. */
+static volatile int diversity_active  = 0;  /* sync set AND DDC0 enabled                 */
+static int          diversity_partner = 1;  /* the DDC folded into DDC0 (bit1 for clients)*/
+#define DIV_PAIR_SAMPLES  (SAMPLES_PER_FRAME / 2)   /* 119 interleaved pairs per DIV packet */
+
 /* ---- wideband (WB) state ---- */
 static volatile int wb_enable = 0;        /* General byte[23]&1 -> enable ADC0 WB        */
 static volatile int wb_ppf = WB_PACKETS;  /* packets per frame (General byte[28]); Thetis
@@ -198,6 +209,38 @@ static inline void build_packet(uint8_t *pkt, const uint8_t *raw, int ch)
   }
 }
 
+/* gather one instant's I/Q (24-bit big-endian, Q then I) for DDC ch into dp; returns dp+6 */
+static inline uint8_t *gather_iq(uint8_t *dp, const uint8_t *sp)
+{
+  dp[0] = sp[6]; dp[1] = sp[5]; dp[2] = sp[4];   /* Q */
+  dp[3] = sp[2]; dp[4] = sp[1]; dp[5] = sp[0];   /* I */
+  return dp + 6;
+}
+
+/* Build one Diversity packet on DDC0's stream: DIV_PAIR_SAMPLES (119) interleaved pairs
+   (DDC0 I,Q)(partner I,Q), so samples-per-frame = 238 (1444-byte packet, MTU-safe). Two
+   such packets cover one 238-instant raw frame ('half' 0/1 selects the instant window),
+   giving 2x the normal DDC0 packet rate -- exactly what piHPSDR/Thetis expect for DIV.
+   Reuses build_packet's byte order/scaling so DIV inherits the proven RX path. */
+static inline void build_div_packet(uint8_t *pkt, const uint8_t *raw, int partner, int half)
+{
+  int i;
+  uint32_t s = seq_ddc[0]++;
+  pkt[0] = s >> 24; pkt[1] = s >> 16; pkt[2] = s >> 8; pkt[3] = s;
+  uint64_t ts = ts_ddc[0]; ts_ddc[0] += DIV_PAIR_SAMPLES;
+  for(i = 0; i < 8; ++i) pkt[4 + i] = (uint8_t)(ts >> (56 - 8 * i));
+  pkt[12] = 0; pkt[13] = 24;
+  pkt[14] = SAMPLES_PER_FRAME >> 8; pkt[15] = SAMPLES_PER_FRAME & 0xff;  /* 238 (119 pairs) */
+  const uint8_t *base = raw + (uint32_t)half * DIV_PAIR_SAMPLES * FIFO_WORD;
+  uint8_t *dp = pkt + 16;
+  for(i = 0; i < DIV_PAIR_SAMPLES; ++i)
+  {
+    const uint8_t *inst = base + (uint32_t)i * FIFO_WORD;
+    dp = gather_iq(dp, inst + 0);            /* DDC0 = ADC0 */
+    dp = gather_iq(dp, inst + partner * 8);  /* partner DDC = ADC1 */
+  }
+}
+
 void *reader_thread(void *arg)
 {
   int ch;
@@ -250,8 +293,11 @@ void *reader_thread(void *arg)
 void *sender_thread(void *arg)
 {
   static uint8_t txpkt[NUM_DDC][SEND_BATCH][PKT_SIZE];   /* sender-built packets */
+  static uint8_t divpkt[2 * SEND_BATCH][PKT_SIZE];       /* Diversity: 2 packets/slot   */
   struct mmsghdr msgs[SEND_BATCH];
   struct iovec   iov[SEND_BATCH];
+  struct mmsghdr divmsgs[2 * SEND_BATCH];
+  struct iovec   diviov[2 * SEND_BATCH];
   int ch, i;
   uint32_t j, n;
   (void)arg;
@@ -265,19 +311,44 @@ void *sender_thread(void *arg)
     if(avail == 0) { usleep(100); continue; }
     n = avail < SEND_BATCH ? avail : SEND_BATCH;
     uint32_t enable = ring[ring_tail % RING_LEN].enable;
+    int div = diversity_active;   /* DDC0 -> interleaved DIV pair; skip its normal build/send */
 
     /* demux the sender's share (channels >= READER_DEMUX) */
     for(j = 0; j < n; ++j)
     {
       raw_slot *fr = &ring[(ring_tail + j) % RING_LEN];
       for(ch = READER_DEMUX; ch < NUM_DDC; ++ch)
-        if(enable & (1u << ch)) build_packet(txpkt[ch][j], fr->raw, ch);
+        if((enable & (1u << ch)) && !(div && ch == 0)) build_packet(txpkt[ch][j], fr->raw, ch);
+    }
+    /* Diversity: DDC0 carries the interleaved (DDC0,partner) pair -- 2 packets per raw
+       slot, from source port 1035. Built here and sent instead of DDC0's normal stream. */
+    if(div)
+    {
+      int partner = diversity_partner;
+      for(j = 0; j < n; ++j)
+      {
+        raw_slot *fr = &ring[(ring_tail + j) % RING_LEN];
+        build_div_packet(divpkt[2 * j],     fr->raw, partner, 0);
+        build_div_packet(divpkt[2 * j + 1], fr->raw, partner, 1);
+      }
+      for(j = 0; j < 2 * n; ++j)
+      {
+        diviov[j].iov_base = divpkt[j];
+        diviov[j].iov_len  = PKT_SIZE;
+        memset(&divmsgs[j], 0, sizeof(divmsgs[j]));
+        divmsgs[j].msg_hdr.msg_name    = &host_addr;
+        divmsgs[j].msg_hdr.msg_namelen = sizeof(host_addr);
+        divmsgs[j].msg_hdr.msg_iov     = &diviov[j];
+        divmsgs[j].msg_hdr.msg_iovlen  = 1;
+      }
+      sendmmsg(sock_data[0], divmsgs, 2 * n, 0);
     }
     /* one sendmmsg per enabled DDC: reader-built packets live in the ring slot,
-       sender-built ones in txpkt */
+       sender-built ones in txpkt (DDC0 is handled by the DIV path above when active) */
     for(ch = 0; ch < NUM_DDC; ++ch)
     {
       if(!(enable & (1u << ch))) continue;
+      if(div && ch == 0) continue;
       for(j = 0; j < n; ++j)
       {
         raw_slot *fr = &ring[(ring_tail + j) % RING_LEN];
@@ -485,7 +556,7 @@ static void send_discovery_reply(struct sockaddr_in *to, socklen_t tolen)
 }
 
 /* ---------- DDC-specific (port 1025): ADC assignment + sample rate ---------- */
-static void process_ddc_specific(const uint8_t *b)
+static void process_ddc_specific(const uint8_t *b, ssize_t n)
 {
   int ch, adc, rate_khz;
   uint8_t sel = 0;
@@ -493,9 +564,15 @@ static void process_ddc_specific(const uint8_t *b)
 
   ddc_enable = b[7];             /* DDC-enable bitmap (DDC0..7) */
 
+  /* Diversity sync register (byte 1363): bit n => DDC n is synced into DDC0. Only present
+     in a full-length DDC-specific packet; a short one implies no sync. Synced DDCs are NOT
+     in the enable bitmap, so fold them in below so their ADC assignment is still applied. */
+  uint8_t sync = (n > 1363) ? b[1363] : 0;
+  uint8_t active = (uint8_t)(ddc_enable | sync);
+
   for(ch = 0; ch < NUM_DDC; ++ch)
   {
-    if(!(ddc_enable & (1u << ch))) continue;
+    if(!(active & (1u << ch))) continue;
     adc      = b[17 + ch * 6];                        /* 0 = ADC0, 1 = ADC1 */
     rate_khz = (b[18 + ch * 6] << 8) | b[19 + ch * 6];
     sel |= (adc & 1) << ch;
@@ -504,6 +581,11 @@ static void process_ddc_specific(const uint8_t *b)
 
   /* apply host ADC bits only to host-controlled DDCs; pinned DDCs (adc_force_mask) keep their ADC */
   *rx_sel  = (uint8_t)((sel & ~adc_force_mask) | (adc_force_val & adc_force_mask));
+  /* Diversity is active when a DDC is synced to DDC0 and DDC0 itself is enabled: DDC0's
+     stream then carries the interleaved (DDC0,partner) pair (see build_div_packet). */
+  if(sync & ~1u)                                        /* some DDC (>0) synced to DDC0 */
+    for(ch = 1; ch < NUM_DDC; ++ch) { if(sync & (1u << ch)) { diversity_partner = ch; break; } }
+  diversity_active = (sync & ~1u) && (ddc_enable & 1u);
   *rx_rate = rate;               /* 48k->1000, 96k->500, 192k->250 (384k->125, Phase 3) */
 }
 
@@ -770,7 +852,7 @@ int main(int argc, char *argv[])
       if(FD_ISSET(sock_ddcspec, &fds))
       {
         n = recvfrom(sock_ddcspec, buffer, sizeof(buffer), 0, (struct sockaddr *)&from, &fromlen);
-        if(n >= 23) { host_addr = from; have_host = 1; clock_gettime(CLOCK_MONOTONIC, &last_cc); process_ddc_specific(buffer); }
+        if(n >= 23) { host_addr = from; have_host = 1; clock_gettime(CLOCK_MONOTONIC, &last_cc); process_ddc_specific(buffer, n); }
       }
       if(FD_ISSET(sock_highprio, &fds))
       {
