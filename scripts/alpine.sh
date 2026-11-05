@@ -1,6 +1,6 @@
 alpine_url=http://dl-cdn.alpinelinux.org/alpine/v3.24
 
-tools_tar=apk-tools-static-3.0.6-r0.apk
+tools_tar=apk-tools-static-3.0.9-r0.apk
 tools_url=$alpine_url/main/armv7/$tools_tar
 
 firmware_tar=linux-firmware-other-20260519-r0.apk
