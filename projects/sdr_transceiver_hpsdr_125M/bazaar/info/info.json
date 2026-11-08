@@ -1,0 +1,6 @@
+{
+    "name": "SDR transceiver compatible with HPSDR",
+    "version": "VERSION",
+    "revision": "REVISION",
+    "description": "SDR transceiver emulating a HPSDR transceiver with a network interface, two receivers and one transmitter. (by Pavel Demin)"
+}

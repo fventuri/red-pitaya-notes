@@ -1,6 +1,6 @@
 alpine_url=http://dl-cdn.alpinelinux.org/alpine/v3.24
 
-tools_tar=apk-tools-static-3.0.6-r0.apk
+tools_tar=apk-tools-static-3.0.9-r0.apk
 tools_url=$alpine_url/main/armv7/$tools_tar
 
 firmware_tar=linux-firmware-other-20260519-r0.apk
@@ -55,9 +55,8 @@ cp /usr/bin/qemu-arm-static $root_dir/usr/bin/
 mkdir -p $root_dir/etc
 cp /etc/resolv.conf $root_dir/etc/
 
-mkdir -p $root_dir/etc/apk
-mkdir -p $root_dir/media/mmcblk0p1/cache
-ln -s /media/mmcblk0p1/cache $root_dir/etc/apk/cache
+mkdir -p $root_dir/etc/apk/cache
+mkdir -p $root_dir/media/mmcblk0p1
 
 cp -r alpine/etc $root_dir/
 sed -i '1,2d' $root_dir/etc/local.d/apps.start
@@ -70,7 +69,10 @@ cp tmp/$project.bit $root_dir/media/mmcblk0p1/apps/$project/
 
 cp -r alpine-apk/sbin $root_dir/
 
-chroot $root_dir /sbin/apk.static --repository $alpine_url/main --update-cache --allow-untrusted --initdb add alpine-base
+$root_dir/sbin/apk.static --root $root_dir --repository $alpine_url/main --update-cache --allow-untrusted --initdb add alpine-base
+
+mv $root_dir/etc/apk/cache $root_dir/media/mmcblk0p1/
+ln -s /media/mmcblk0p1/cache $root_dir/etc/apk/cache
 
 echo $alpine_url/main > $root_dir/etc/apk/repositories
 echo $alpine_url/community >> $root_dir/etc/apk/repositories

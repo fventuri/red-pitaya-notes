@@ -1,6 +1,6 @@
 alpine_url=http://dl-cdn.alpinelinux.org/alpine/v3.24
 
-tools_tar=apk-tools-static-3.0.6-r0.apk
+tools_tar=apk-tools-static-3.0.9-r0.apk
 tools_url=$alpine_url/main/armv7/$tools_tar
 
 firmware_tar=linux-firmware-other-20260519-r0.apk
@@ -53,18 +53,22 @@ cp /usr/bin/qemu-arm-static $root_dir/usr/bin/
 mkdir -p $root_dir/etc
 cp /etc/resolv.conf $root_dir/etc/
 
-mkdir -p $root_dir/etc/apk
-mkdir -p $root_dir/media/mmcblk0p1/cache
-ln -s /media/mmcblk0p1/cache $root_dir/etc/apk/cache
+mkdir -p $root_dir/etc/apk/cache
+mkdir -p $root_dir/media/mmcblk0p1
 
 cp -r alpine/etc $root_dir/
 cp -r alpine/apps $root_dir/media/mmcblk0p1/
 
 projects="common_tools led_blinker mcpha playground pulsed_nmr sdr_receiver sdr_receiver_hpsdr sdr_receiver_wide sdr_transceiver sdr_transceiver_ft8 sdr_transceiver_hpsdr sdr_transceiver_wide sdr_transceiver_wspr vna"
 
-projects_122_88="led_blinker_122_88 pulsed_nmr_122_88 sdr_receiver_122_88 sdr_receiver_hpsdr_122_88 sdr_receiver_wide_122_88 sdr_transceiver_122_88 sdr_transceiver_ft8_122_88 sdr_transceiver_hpsdr_122_88 sdr_transceiver_wspr_122_88 vna_122_88"
+projects_122M88="led_blinker_122M88 pulsed_nmr_122M88 sdr_receiver_122M88 sdr_receiver_hpsdr_122M88 sdr_receiver_wide_122M88 sdr_transceiver_122M88 sdr_transceiver_ft8_122M88 sdr_transceiver_hpsdr_122M88 sdr_transceiver_wspr_122M88 vna_122M88"
 
-for p in $projects $projects_122_88
+projects_125M="common_tools led_blinker mcpha_125M playground pulsed_nmr_125M sdr_receiver_125M sdr_receiver_hpsdr_125M sdr_receiver_hpsdr2_125M sdr_receiver_hpsdr2_narrow_125M sdr_receiver_hpsdr2_wide_125M sdr_receiver_hpsdr2_extrawide_125M sdr_receiver_wide_125M sdr_transceiver_125M sdr_transceiver_ft8_125M sdr_transceiver_hpsdr_125M sdr_transceiver_wide_125M sdr_transceiver_wspr_125M vna_125M"
+
+#for p in $projects $projects_122M88
+# combined image: ship both the 125M (Zynq 7010) and 122M88 (Zynq 7020) app sets;
+# the top-level apps/server picks the right index.html at runtime from the Zynq id + hw_rev freq
+for p in $projects_125M $projects_122M88
 do
   mkdir -p $root_dir/media/mmcblk0p1/apps/$p
   cp -r projects/$p/server/* $root_dir/media/mmcblk0p1/apps/$p/
@@ -74,7 +78,10 @@ done
 
 cp -r alpine-apk/sbin $root_dir/
 
-chroot $root_dir /sbin/apk.static --repository $alpine_url/main --update-cache --allow-untrusted --initdb add alpine-base
+$root_dir/sbin/apk.static --root $root_dir --repository $alpine_url/main --update-cache --allow-untrusted --initdb add alpine-base
+
+mv $root_dir/etc/apk/cache $root_dir/media/mmcblk0p1/
+ln -s /media/mmcblk0p1/cache $root_dir/etc/apk/cache
 
 echo $alpine_url/main > $root_dir/etc/apk/repositories
 echo $alpine_url/community >> $root_dir/etc/apk/repositories
@@ -82,7 +89,7 @@ echo $alpine_url/community >> $root_dir/etc/apk/repositories
 chroot $root_dir /bin/sh <<- EOF_CHROOT
 
 apk update
-apk add openssh u-boot-tools ucspi-tcp6 iw wpa_supplicant dhcpcd dnsmasq hostapd iptables avahi dbus dcron chrony gpsd libgfortran musl-dev libconfig-dev alsa-lib-dev alsa-utils curl wget less nano bc dos2unix
+apk add openssh u-boot-tools ucspi-tcp6 iw wpa_supplicant dhcpcd dnsmasq hostapd iptables avahi dbus dcron chrony gpsd libgfortran musl-dev libconfig-dev alsa-lib-dev alsa-utils curl wget less nano bc dos2unix dmesg ethtool
 
 rc-update add bootmisc boot
 rc-update add hostname boot
@@ -119,9 +126,9 @@ sed -i 's/^SAVE_ON_STOP=.*/SAVE_ON_STOP="no"/;s/^IPFORWARD=.*/IPFORWARD="yes"/' 
 
 sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' etc/ssh/sshd_config
 
-echo root:$passwd | chpasswd
+echo "root:$passwd" | chpasswd
 
-hostname red-pitaya
+hostname trx-duo
 
 sed -i 's/^# LBU_MEDIA=.*/LBU_MEDIA=mmcblk0p1/' etc/lbu/lbu.conf
 
@@ -136,9 +143,7 @@ ln -s /media/mmcblk0p1/wifi root/wifi
 lbu add root
 lbu delete etc/resolv.conf
 lbu delete etc/cron.d/ft8
-lbu delete etc/cron.d/ft8_122_88
 lbu delete etc/cron.d/wspr
-lbu delete etc/cron.d/wspr_122_88
 lbu delete root/.ash_history
 
 lbu commit -d
@@ -165,7 +170,8 @@ tar -zxf \$wsprd_tar --strip-components=1 --directory=\$wsprd_dir
 rm \$wsprd_tar
 make -C \$wsprd_dir
 
-for p in server $projects $projects_122_88
+#for p in server $projects $projects_122M88
+for p in server $projects_125M $projects_122M88
 do
   make -C /media/mmcblk0p1/apps/\$p clean
   make -C /media/mmcblk0p1/apps/\$p
@@ -175,7 +181,7 @@ EOF_CHROOT
 
 cp -r $root_dir/media/mmcblk0p1/apps .
 cp -r $root_dir/media/mmcblk0p1/cache .
-cp $root_dir/media/mmcblk0p1/red-pitaya.apkovl.tar.gz .
+cp $root_dir/media/mmcblk0p1/trx-duo.apkovl.tar.gz .
 
 cp -r alpine/wifi .
 
@@ -183,6 +189,21 @@ hostname -F /etc/hostname
 
 rm -rf $root_dir alpine-apk
 
-zip -r red-pitaya-alpine-3.24-armv7-`date +%Y%m%d`.zip apps boot.bin cache modloop red-pitaya.apkovl.tar.gz wifi
+# split in 25MB parts so they can be uploaded to GitHub - fv
+zipprefix=red-pitaya-alpine-3.24-armv7-`date +%Y%m%d`
+rm $zipprefix.z*
+zip -r -s 25m $zipprefix.zip apps boot.bin cache modloop trx-duo.apkovl.tar.gz wifi
 
-rm -rf apps cache modloop red-pitaya.apkovl.tar.gz wifi
+# compute and save checksums
+cksums=$zipprefix.cksums
+> $cksums
+echo "MD5 checksums" >> $cksums
+md5sum $zipprefix.z* >> $cksums
+echo >> $cksums
+echo "SHA1 checksums" >> $cksums
+sha1sum $zipprefix.z* >> $cksums
+echo >> $cksums
+echo "SHA256 checksums" >> $cksums
+sha256sum $zipprefix.z* >> $cksums
+
+rm -rf apps cache modloop trx-duo.apkovl.tar.gz wifi
